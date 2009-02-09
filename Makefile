@@ -16,4 +16,4 @@ rel: all
 
 ./%.beam: %.erl
 	@mkdir -p ebin
-	erlc +debug_info -o ebin $<
+	erlc +debug_info -I include -o ebin $<

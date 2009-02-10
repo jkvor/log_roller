@@ -15,43 +15,51 @@ list() -> list([]).
 %%		 Args = [{max,_}, {type,_}, {node,_}, {time,_}, {grep,_}]
 %%		 Result = [{type, node, time, message}]
 list(Args) ->
-	Max = proplists:get_value(max, Args, ?DEFAULT_MAX),
-	Type = proplists:get_value(type, Args, ?DEFAULT_TYPE),
-	_Grep = proplists:get_value(grep, Args, undefined),
-	format_list(fetch(Max, Type)).
+	format_list(fetch(Args)).
 	
 show() -> show([]).
 
-show(Args) ->
-	Max = proplists:get_value(max, Args, ?DEFAULT_MAX),
-	Type = proplists:get_value(type, Args, ?DEFAULT_TYPE),
-	_Grep = proplists:get_value(grep, Args, undefined),
-	format_show(fetch(Max, Type)).
+show(ID) when is_integer(ID) ->
+	format_show(fetch([{max, 1}, {id, ID}]));
 	
-fetch(Max, Type) ->
+show(Args) when is_list(Args) ->
+	format_show(fetch(Args)).
+	
+fetch(Args) ->
 	Index = lookup_log_index(),
-	fetch(Max, Type, [], Index, next_index(Index)).
+	{Max, Args1} =
+		case lists:keytake(max, 1, Args) of
+			{value, {max, Max0}, Args0} -> {Max0, Args0};
+			false -> {0, Args}
+		end,
+	fetch(Max, Args1, [], Index, next_index(Index)).
 	
-fetch(Max, _, Acc, _, _) when length(Acc) >= Max -> 
+fetch(Max, _, Acc, _, _) when Max > 0, length(Acc) >= Max -> 
 	lists:sublist(Acc, Max);
 
 fetch(_, _, Acc, Index, Index) -> 
 	Acc;
 
-fetch(Max, Type, Acc, Index, Final) ->
+fetch(Max, Args, Acc, Index, Final) ->
 	TableName = table_name(Index),
 	case table_exists(TableName) of
 		true ->
-			Res =
-				case Type of
-					all ->
-						mnesia:dirty_match_object(TableName, #log_entry{id='_', type='_', node='_', time='_', message='_'});
-					_ ->
-						mnesia:dirty_match_object(TableName, #log_entry{id='_', type=Type, node='_', time='_', message='_'})
-				end, 
-			fetch(Max, Type, lists:append(Res, Acc), prev_index(Index), Final);
+			Type = 
+				case proplists:get_value(type, Args, all) of
+					all -> '_';
+					Type0 -> Type0
+				end,
+			Log = #log_entry{
+				id=proplists:get_value(id, Args, '_'), 
+				type=Type, 
+				node=proplists:get_value(node, Args, '_'), 
+				time='_', 
+				message='_'
+			},
+			Res = mnesia:dirty_match_object(TableName, Log),
+			fetch(Max, Args, lists:append(Res, Acc), prev_index(Index), Final);
 		false ->
-			fetch(Max, Type, Acc, Final, Final)
+			fetch(Max, Args, Acc, Final, Final)
 	end.
 
 create_config_table() ->

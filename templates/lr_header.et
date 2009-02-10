@@ -1,0 +1,35 @@
+<%? {data, Prefix, Node, Max, Type, View} = Data %>
+<form method="get" action="<% Prefix %>/log">
+	<table>
+		<tr>
+			<td>Max:</td>
+			<td><input type="text" name="max" value="<% Max %>"/></td>
+		</tr>
+		<tr>
+			<td>Type:</td>
+			<td>
+				<select name="type">
+					<option value="all" <% selected("all", Type) %>>All</option>
+					<option value="progress" <% selected("progress", Type) %>>Progress</option>
+					<option value="info" <% selected("info", Type) %>>Info</option>
+					<option value="error" <% selected("error", Type) %>>Error</option>
+				</select>
+			</td>
+		</tr>
+		<tr>
+			<td></td>
+			<td>
+				<input type="submit" value="Reload" />
+				<input type="radio" name="view" value="list" <% checked("list", View) %>>List
+				<input type="radio" name="view" value="show" <% checked("show", View) %>>Details
+				<input type="hidden" name="name" value="<% Node %>" />
+			</td>
+		</tr>
+	</table>
+</form>
+<%@ selected(Type, Type) %>
+selected="yes"
+<%@ selected(_, _) %>
+<%@ checked(View, View) %>
+checked
+<%@ checked(_, _) %>

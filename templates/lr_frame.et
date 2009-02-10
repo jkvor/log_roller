@@ -1,0 +1,37 @@
+<%? {data, Prefix, Content} = Data %>
+<html>
+<head>
+	<title>Log Roller</title>
+	<style type="text/css">
+		div#nodes {
+			overflow: auto; 
+			display: block; 
+			float: left; 
+			width: 200px; 
+			border: solid 1px #EEEEEE;
+			margin: 5px;
+			padding: 5px;
+		}
+
+		div#content {
+			display: block;
+			float: left; 
+			width: 800px; 
+			border: solid 1px #EEEEEE;
+			margin: 5px;
+			padding: 5px;
+		}
+	</style>
+</head>
+<body>
+	<div id="nodes">
+		<% [print_node(Prefix, atom_to_list(Node)) || Node <- [node()|nodes()]] %>
+	</div>
+	<div id="content">
+		<% Content %>
+	</div>
+</body>
+</html>
+
+<%@ print_node(Prefix, Node) %>
+<div><a href="<% Prefix %>/log?view=list&name=<% mochiweb_util:quote_plus(Node) %>"><% Node %></a></div>

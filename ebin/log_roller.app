@@ -7,5 +7,5 @@
     ]},
     {registered, []},
     {mod, {log_roller, []}},
-    {applications, [kernel, stdlib]}
+    {applications, [kernel, stdlib, webtool]}
 ]}.

@@ -5,13 +5,16 @@ ERL_OBJECTS := $(ERL_SOURCES:%.erl=./%.beam)
 
 all: $(ERL_OBJECTS)
 
-clean:
-	rm -rf ebin/*.beam *.boot *.rel *.script Mnesia* crash_report.dump
+templates: all
+	erl -pa ebin -eval 'log_roller:compile_templates()' -s init stop -noshell
 
-install: all
+clean:
+	rm -rf ebin/*.beam *.boot *.rel *.script Mnesia* erl_crash.dump
+
+install: templates
 	install ebin/* $(SASL_DIR)/ebin
 
-rel: all
+rel: templates
 	erl -pa ebin -noshell -run log_roller build_rel -s init stop
 
 ./%.beam: %.erl

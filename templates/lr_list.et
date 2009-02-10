@@ -1,0 +1,6 @@
+<%? {data, Prefix, Node, List} = Data %>
+<% [print_log(Prefix, Node, Entry) || Entry <- List] %>
+<%@ print_log(Prefix, Node, {ID, Type, LogNode, Time}) %>
+<div>
+	<a href="<% Prefix %>/log?view=show&name=<% Node %>&id=<% integer_to_list(ID) %>"><% atom_to_list(Type) %> - <% atom_to_list(LogNode) %> -<% Time %></a>
+</div>

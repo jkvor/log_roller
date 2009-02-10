@@ -1,0 +1,18 @@
+#!/bin/sh
+
+ROOT_DIR=`erl -eval 'io:format("~p~n", [code:lib_dir("log_roller")])' -s init stop -noshell`
+HOSTNAME=`case \`uname\` in Darwin ) echo \`hostname\`;; * ) echo \`hostname --fqdn\`;; esac`
+
+case $1 in
+'dev' )
+	erl -setcookie xxx -pa ebin -name log_roller@$HOSTNAME +W w +A 1 -boot log_roller -eval 'log_roller:start_webtool(4057, {0,0,0,0}, "localhost")'
+	;;
+'start' )
+    erl -detached -setcookie xxx -name log_roller@$HOSTNAME +W w +A 1 -boot log_roller -noshell -eval 'log_roller:start_webtool(4057, {0,0,0,0}, "localhost")'
+    ;;
+'stop' )
+    erl -name logrollerctl@$HOSTNAME -pa $ROOT_DIR/ebin -noshell -s log_roller stop -s init stop -- log_roller@$HOSTNAME
+    ;;
+*)
+   echo "usage: `basename $0` {dev|start|stop}"
+esac

@@ -2,32 +2,32 @@
 -author('jacob.vorreuter@gmail.com').
 -behaviour(application).
 
--export([start/2, stop/1, init/1]).
+-export([start/2, stop/1, start_webtool/0, start_webtool/3]).
 -export([build_rel/0, compile_templates/0, reload/0]).
 
 -include("log_roller.hrl").
 
 start(_StartType, StartArgs) -> 
 	ok = error_logger:add_report_handler(log_roller_h, StartArgs),
-	{ok, Pid} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
-	webtool:start_tools([],"app=log_roller"),
-	{ok, Pid}.
+	{ok, self()}.
 
 stop(_) -> ok.
 
-init(_) ->
-	{ok, {{one_for_one, 10, 10}, [{webtool, {webtool, start, ?WEBTOOL_ARGS}, permanent, 5000, worker, [webtool]}]}}.
-
+start_webtool() -> start_webtool(8888, {0,0,0,0}, "localhost").
+start_webtool(Port, BindAddr, ServerName) ->
+	webtool:start(standard_path, [{port,Port},{bind_address,BindAddr},{server_name,ServerName}]),
+	webtool:start_tools([],"app=log_roller"),
+	ok.
+	
 build_rel() ->
     {ok, FD} = file:open("log_roller.rel", [write]),
     RootDir = code:root_dir(),
     Patterns = [
         {RootDir ++ "/", "erts-*"},
         {RootDir ++ "/lib/", "kernel-*"},
-        {RootDir ++ "/lib/", "stdlib-*"},
-		{RootDir ++ "/lib/", "webtool-*"}
+        {RootDir ++ "/lib/", "stdlib-*"}
     ],
-    [Erts, Kerne, Stdl, Webtool] = [begin
+    [Erts, Kerne, Stdl] = [begin
         [R | _ ] = filelib:wildcard(P, D),
         [_ | [Ra] ] = string:tokens(R, "-"),
         Ra
@@ -37,7 +37,6 @@ build_rel() ->
         {erts, Erts}, [
             {kernel, Kerne},
             {stdlib, Stdl},
-			{webtool, Webtool},
             {log_roller, "0.0.1"}
         ]
     },

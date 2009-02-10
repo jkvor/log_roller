@@ -3,6 +3,7 @@
 
 -export([list/0, list/1, show/0, show/1]).
 -export([create_counter_table/0, create_config_table/0, lookup_log_index/0, switch_log_tables/1, next_index/1, table_name/1]).
+-export([select_all/1]).
 
 -include("log_roller.hrl").
 
@@ -149,6 +150,9 @@ lookup_log_index() ->
 		[{log_roller_config, index, Index}] -> 
 			Index
 	end.
+	
+select_all(Index) ->
+	mnesia:dirty_match_object(table_name(Index), {log_entry, '_', '_', '_', '_', '_'}).
 	
 table_name(Index) when is_integer(Index) -> 
 	list_to_atom("log_roller_" ++ integer_to_list(Index)).

@@ -12,7 +12,7 @@ config_data() ->
 			]}.
 
 index(_Env,_Input) ->
-	lr_frame:render({data, ?TOOL_BASE_URL, "<H3><-- Select a node from the list</H3>"}).
+	lr_frame:render({data, ?TOOL_BASE_URL, "<H3>Select a node from the list</H3><-- ^_^"}).
 
 log(_Env, Input) ->
 	QS0 = httpd:parse_query(Input),

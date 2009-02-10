@@ -11,16 +11,19 @@
 			overflow: auto; 
 			display: block; 
 			float: left; 
-			width: 200px; 
+			width: 250px; 
+			height: 95%;
 			border: solid 1px #EEEEEE;
 			margin: 5px;
 			padding: 5px;
 		}
 
 		div#content {
+			overflow: auto; 
 			display: block;
 			float: left; 
 			width: 800px; 
+			height: 95%;
 			border: solid 1px #EEEEEE;
 			margin: 5px;
 			padding: 5px;
@@ -34,7 +37,7 @@
 		
 		a:visited {
 			text-decoration: none;
-			color: #999999;
+			color: #444444;
 		}
 		
 		a:hover {
@@ -48,6 +51,7 @@
 </head>
 <body>
 	<div id="nodes">
+		<h3>Connected Nodes</h3>
 		<% [print_node(Prefix, atom_to_list(Node)) || Node <- [node()|nodes()]] %>
 	</div>
 	<div id="content">
@@ -57,4 +61,4 @@
 </html>
 
 <%@ print_node(Prefix, Node) %>
-<div><a href="<% Prefix %>/log?view=list&name=<% mochiweb_util:quote_plus(Node) %>"><% Node %></a></div>
+<a href="<% Prefix %>/log?view=list&name=<% mochiweb_util:quote_plus(Node) %>"><nobr><% Node %></nobr></a>

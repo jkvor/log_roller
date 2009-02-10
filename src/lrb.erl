@@ -15,7 +15,12 @@ list() -> list([]).
 %%		 Args = [{max,_}, {type,_}, {node,_}, {time,_}, {grep,_}]
 %%		 Result = [{type, node, time, message}]
 list(Args) ->
-	format_list(fetch(Args)).
+	case proplists:is_defined(grep, Args) of
+		true ->
+			format_list(filter(Args));
+		false ->
+			format_list(fetch(Args))
+	end.
 	
 show() -> show([]).
 
@@ -23,7 +28,12 @@ show(ID) when is_integer(ID) ->
 	format_show(fetch([{max, 1}, {id, ID}]));
 	
 show(Args) when is_list(Args) ->
-	format_show(fetch(Args)).
+	case proplists:is_defined(grep, Args) of
+		true ->
+			format_show(filter(Args));
+		false ->
+			format_show(fetch(Args))
+	end.
 	
 fetch(Args) ->
 	Index = lookup_log_index(),
@@ -44,24 +54,60 @@ fetch(Max, Args, Acc, Index, Final) ->
 	TableName = table_name(Index),
 	case table_exists(TableName) of
 		true ->
-			Type = 
-				case proplists:get_value(type, Args, all) of
-					all -> '_';
-					Type0 -> Type0
-				end,
-			Log = #log_entry{
-				id=proplists:get_value(id, Args, '_'), 
-				type=Type, 
-				node=proplists:get_value(node, Args, '_'), 
-				time='_', 
-				message='_'
-			},
-			Res = mnesia:dirty_match_object(TableName, Log),
+			Res = match_object(Args, TableName),
 			fetch(Max, Args, lists:append(Res, Acc), prev_index(Index), Final);
 		false ->
 			fetch(Max, Args, Acc, Final, Final)
 	end.
 
+filter(Args) ->
+	Index = lookup_log_index(),
+	{Max, Args1} =
+		case lists:keytake(max, 1, Args) of
+			{value, {max, Max0}, Args0} -> {Max0, Args0};
+			false -> {0, Args}
+		end,
+	{ok, Regexp} = re:compile(proplists:get_value(grep, Args1)),
+	filter(Regexp, Max, Args1, [], Index, next_index(Index)).
+		
+filter(_, Max, _, Acc, _, _) when Max > 0, length(Acc) >= Max -> 
+	lists:sublist(Acc, Max);
+		
+filter(_, _, _, Acc, Index, Index) -> 
+	Acc;
+	
+filter(RE, Max, Args, Acc, Index, Final) ->
+	TableName = table_name(Index),
+	case table_exists(TableName) of
+		true ->
+			Res = match_object(Args, TableName),
+			Res1 = lists:foldr(
+					fun(Log, Acc0) ->
+						case re:run(flatten(Log#log_entry.message), RE) of
+							{match, _} -> [Log|Acc0];
+							nomatch -> Acc0
+						end
+					end, [], Res),
+			filter(RE, Max, Args, lists:append(Res1, Acc), prev_index(Index), Final);
+		false ->
+			filter(RE, Max, Args, Acc, Final, Final)
+	end.
+	
+match_object(Args, TableName) ->
+	Type = 
+		case proplists:get_value(type, Args, all) of
+			all -> '_';
+			Type0 -> Type0
+		end,
+	Log = #log_entry{
+		id=proplists:get_value(id, Args, '_'), 
+		type=Type, 
+		node=proplists:get_value(node, Args, '_'), 
+		time='_', 
+		message='_'
+	},
+	mnesia:dirty_match_object(TableName, Log).
+	
 create_config_table() ->
 	case table_exists(log_roller_config) of
 		true -> ok;
@@ -128,3 +174,5 @@ format_show(List) ->
 	
 format_time({{Y,Mo,D},{H,Mi,S}}) ->
 	lists:flatten(io_lib:format("~w-~2.2.0w-~2.2.0w ~2.2.0w:~2.2.0w:~2.2.0w", [Y,Mo,D,H,Mi,S])).
+	
+flatten(Stuff) -> lists:flatten(io_lib:format("~p", [Stuff])).

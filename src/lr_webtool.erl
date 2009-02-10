@@ -32,8 +32,13 @@ display(Node, View, QS) ->
 		{error,Reason} -> 
 			Reason;
 		List ->
-			Header = lr_header:render({data, ?TOOL_BASE_URL, Node, proplists:get_value("max", QS, ""), proplists:get_value("type", QS, "all"), View}),
-			Content = erlang:apply(list_to_atom("lr_" ++ View), render, [{data, ?TOOL_BASE_URL, Node, List}]),
+			Header = lr_header:render({data, ?TOOL_BASE_URL, Node, 
+						proplists:get_value("max", QS, ""), 
+						proplists:get_value("type", QS, "all"), 
+						proplists:get_value("grep", QS, ""), 
+						View}
+					),
+			Content = erlang:apply(list_to_atom("lr_" ++ View), render, [{data, ?TOOL_BASE_URL, Node, lists:reverse(List)}]),
 			lr_frame:render({data, ?TOOL_BASE_URL, [Header, Content]})
 	end.
 	

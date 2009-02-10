@@ -3,6 +3,10 @@
 <head>
 	<title>Log Roller</title>
 	<style type="text/css">
+		body {
+			color: #666666;
+		}
+	
 		div#nodes {
 			overflow: auto; 
 			display: block; 
@@ -20,6 +24,25 @@
 			border: solid 1px #EEEEEE;
 			margin: 5px;
 			padding: 5px;
+			color: #666666;
+		}
+				
+		a:link {
+			text-decoration: none;
+			color: #666666;
+		}
+		
+		a:visited {
+			text-decoration: none;
+			color: #999999;
+		}
+		
+		a:hover {
+			color: #DDDDDD;
+		}
+		
+		a:active {
+			color: #000000;
 		}
 	</style>
 </head>

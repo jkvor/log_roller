@@ -1,7 +1,7 @@
 <%? {data, Prefix, Node, List} = Data %>
 <% [print_log(Prefix, Node, Entry) || Entry <- List] %>
 <%@ print_log(_Prefix, _Node, {_ID, Type, _LogNode, Time, Msg}) %>
-<pre>
+<pre class="show">
 =<% string:to_upper(atom_to_list(Type)) %> REPORT==== <% Time %> ===
 <% lists:flatten(io_lib:format("~p", [Msg])) %>
 </pre>

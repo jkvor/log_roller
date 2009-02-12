@@ -2,7 +2,7 @@
 -author('jacob.vorreuter@gmail.com').
 -behaviour(application).
 
--export([start/2, stop/1, start_webtool/0, start_webtool/3]).
+-export([start/2, stop/1, start_phase/3, start_webtool/0, start_webtool/3]).
 -export([build_rel/0, compile_templates/0, reload/0]).
 
 -include("log_roller.hrl").
@@ -12,6 +12,10 @@ start(_StartType, StartArgs) ->
 	{ok, self()}.
 
 stop(_) -> ok.
+
+start_phase(world, _, _) ->
+	net_adm:world(),
+	ok.
 
 start_webtool() -> start_webtool(8888, {0,0,0,0}, "localhost").
 start_webtool(Port, BindAddr, ServerName) ->

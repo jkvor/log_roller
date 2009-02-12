@@ -7,6 +7,9 @@ case $1 in
 'dev' )
 	erl -setcookie xxx -pa ebin -name log_roller@$HOSTNAME +W w +A 1 -boot log_roller -eval 'log_roller:start_webtool(4057, {0,0,0,0}, "localhost")'
 	;;
+'console' )
+	erl -setcookie xxx -name log_roller@$HOSTNAME +W w +A 1 -boot log_roller -eval 'log_roller:start_webtool(4057, {0,0,0,0}, "localhost")'
+	;;
 'start' )
     erl -detached -setcookie xxx -name log_roller@$HOSTNAME +W w +A 1 -boot log_roller -noshell -eval 'log_roller:start_webtool(4057, {0,0,0,0}, "localhost")'
     ;;

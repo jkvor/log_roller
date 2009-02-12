@@ -12,7 +12,7 @@ templates: all
 	erl -pa ebin -eval 'log_roller:compile_templates()' -s init stop -noshell
 
 clean:
-	rm -rf ebin/*.beam *.boot *.rel *.script Mnesia* erl_crash.dump
+	rm -rf ebin/*.beam *.boot *.rel *.script Mnesia* erl_crash.dump *.tgz
 
 install: rel
 	mkdir -p ${LIBDIR}/log_roller-$(VERSION)/{ebin,include,priv}
@@ -21,6 +21,11 @@ install: rel
 	mkdir -p /etc/init.d
 	cp log_roller /etc/init.d/
 
+package: clean
+	@mkdir log_roller-$(VERSION)/ && cp -rf ebin include log_roller Makefile priv README src templates log_roller-$(VERSION)
+	@COPYFILE_DISABLE=true tar zcf log_roller-$(VERSION).tgz log_roller-$(VERSION)
+	@rm -rf log_roller-$(VERSION)/
+		
 rel: templates
 	erl -pa ebin -noshell -run log_roller build_rel -s init stop
 

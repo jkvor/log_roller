@@ -1,0 +1,4 @@
+ebin/*.beam
+log_roller.script
+log_roller.boot
+log_roller.rel

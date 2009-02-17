@@ -11,10 +11,11 @@ start(_StartType, StartArgs) ->
 	ok = error_logger:add_report_handler(log_roller_h, StartArgs),
 	{ok, self()}.
 
-stop(_) -> ok.
+stop(_) -> 
+	ok.
 
 start_phase(world, _, _) ->
-	net_adm:world(),
+	(catch net_adm:world()),
 	ok.
 
 start_webtool() -> start_webtool(8888, {0,0,0,0}, "localhost").

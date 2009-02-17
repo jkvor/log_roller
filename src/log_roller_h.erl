@@ -38,8 +38,15 @@ db_init() ->
 			ok = lrb:create_config_table(),
 			{ok, lrb:lookup_log_index()};
 		{error,{_,{already_exists,_}}} -> 
+			io:format("schema already exists~n"),
 			ok = mnesia:start(),
 		    ok = mnesia:wait_for_tables(mnesia:system_info(local_tables), infinity),
+			case lrb:table_exists(log_roller_config) of
+				false ->
+					ok = lrb:create_counter_table(),
+					ok = lrb:create_config_table();
+				true -> ok
+			end,
 			{ok, lrb:lookup_log_index()}
 	end.
 

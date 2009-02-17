@@ -2,7 +2,7 @@
 -author('jacob.vorreuter@gmail.com').
 
 -export([list/0, list/1, show/0, show/1]).
--export([create_counter_table/0, create_config_table/0, lookup_log_index/0, switch_log_tables/1, next_index/1, table_name/1]).
+-export([create_counter_table/0, create_config_table/0, lookup_log_index/0, switch_log_tables/1, next_index/1, table_name/1, table_exists/1]).
 -export([select_all/1]).
 
 -include("log_roller.hrl").
@@ -135,20 +135,23 @@ switch_log_tables(Index) when is_integer(Index) ->
 		false ->
 			{atomic, ok} = mnesia:create_table(TableName, 
 									[{disc_copies, [node()]},
-								      {type, ordered_set},
-								      {local_content, true},
+								      {type, set},
 								      {record_name, log_entry},
 								      {attributes, record_info(fields, log_entry)}])
 	end,
 	mnesia:dirty_write({log_roller_config, index, Index}).
 	
 lookup_log_index() ->
-	case mnesia:dirty_read(log_roller_config, index) of
+	case (catch mnesia:dirty_read(log_roller_config, index)) of
 		[] -> 
 			ok = switch_log_tables(1),
 			1;
 		[{log_roller_config, index, Index}] -> 
-			Index
+			Index;
+		{'EXIT', {aborted, {no_exists,[log_roller_config,index]}}} ->
+			ok = create_config_table(),
+			ok = switch_log_tables(1),
+			1
 	end.
 	
 select_all(Index) ->
@@ -158,7 +161,19 @@ table_name(Index) when is_integer(Index) ->
 	list_to_atom("log_roller_" ++ integer_to_list(Index)).
 
 table_exists(TableName) when is_atom(TableName) ->
-	lists:member(TableName, mnesia:system_info(local_tables)).
+	case (catch mnesia:system_info(local_tables)) of
+		Tables when is_list(Tables) ->
+			lists:member(TableName, Tables);
+		{'EXIT', {aborted,{node_not_running,_}}} ->
+			ok = init_database(),
+			lists:member(TableName, mnesia:system_info(local_tables))
+	end.
+	
+init_database() ->
+	(catch mnesia:create_schema([node()])),
+	ok = mnesia:start(),
+	ok = mnesia:wait_for_tables(mnesia:system_info(local_tables), infinity),
+	ok.
 	
 next_index(CurrentIndex) when is_integer(CurrentIndex), CurrentIndex >= ?NUM_TABLES -> 1;
 next_index(CurrentIndex) when is_integer(CurrentIndex) -> CurrentIndex + 1.

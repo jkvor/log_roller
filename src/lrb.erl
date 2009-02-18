@@ -141,12 +141,12 @@ create_config_table() ->
 	end, ok.
 	
 create_counter_table() ->
-	case table_exists(counter) of
+	case table_exists(log_roller_counter) of
 		true -> ok;
 		false ->
-			{atomic, ok} = mnesia:create_table(counter, 
+			{atomic, ok} = mnesia:create_table(log_roller_counter, 
 	                        	[{disc_copies, [node()]}, 
-	                         	 {attributes, record_info(fields, counter)}])
+	                         	 {attributes, record_info(fields, log_roller_counter)}])
 	end, ok.
 			
 switch_log_tables(Index) when is_integer(Index) ->	

@@ -160,7 +160,7 @@ commit(#state{index=Index0, wordsize=WordSize, maxbytes=MaxBytes}=State, Log) ->
 			true -> 
 				{ok, Index0}
 		end,
-	NextID = mnesia:dirty_update_counter(counter, log_entry, 1),
+	NextID = (catch mnesia:dirty_update_counter(log_roller_counter, log_entry, 1)),
 	%io:format("next id: ~p~n", [NextID]),
 	ok = mnesia:dirty_write(lrb:table_name(Index), Log#log_entry{id=NextID}),
 	{ok, State#state{index=Index}}.

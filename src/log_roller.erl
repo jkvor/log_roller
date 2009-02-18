@@ -24,28 +24,40 @@
 -author('jacob.vorreuter@gmail.com').
 -behaviour(application).
 
--export([start/2, stop/1, start_phase/3, start_webtool/0, start_webtool/3]).
+-export([start/2, stop/1, init/1, start_phase/3, start_webtool/0, start_webtool/3]).
 -export([build_rel/0, compile_templates/0, reload/0]).
 
 -include("log_roller.hrl").
-
-start(_StartType, StartArgs) -> 
-	ok = error_logger:add_report_handler(log_roller_h, StartArgs),
-	{ok, self()}.
+	
+start(_StartType, _StartArgs) -> 
+	%% read log_roller_type (subscriber/publisher) from command line args
+	%%	ex: erl -log_roller_type subscriber -boot log_roller
+	case init:get_argument(log_roller_type) of 
+		{ok,[["subscriber"]]} -> 
+			supervisor:start_link({local, ?MODULE}, ?MODULE, []);
+		_ -> % default is "publisher"
+			ok = error_logger:add_report_handler(log_roller_h, []),
+			{ok, self()}
+	end.
 
 stop(_) -> 
 	ok.
+	
+init(_) ->
+	{ok, {{one_for_one, 10, 10}, [
+	    {log_roller_subscriber, {log_roller_subscriber, start, []}, permanent, 5000, worker, [log_roller_subscriber]}
+	]}}.
 
 start_phase(world, _, _) ->
 	(catch net_adm:world()),
 	ok.
-
+	
 start_webtool() -> start_webtool(8888, {0,0,0,0}, "localhost").
 start_webtool(Port, BindAddr, ServerName) ->
 	webtool:start(standard_path, [{port,Port},{bind_address,BindAddr},{server_name,ServerName}]),
 	webtool:start_tools([],"app=log_roller"),
 	ok.
-	
+
 build_rel() ->
     {ok, FD} = file:open("log_roller.rel", [write]),
     RootDir = code:root_dir(),

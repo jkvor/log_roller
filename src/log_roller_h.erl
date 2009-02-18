@@ -29,9 +29,7 @@
 
 -include("log_roller.hrl").
 
--record(state, {index, wordsize, maxbytes}).
-
-%% error_logger:add_report_handler(log_roller, [{maxbytes, 100}])
+-record(state, {listening_pids}).
 
 %%%----------------------------------------------------------------------
 %%% Callback functions from gen_event
@@ -42,35 +40,9 @@
 %% Returns: {ok, State}          |
 %%          Other
 %%----------------------------------------------------------------------
-init([]) -> init([{maxbytes, ?MIN_BYTES}]);
 
-init([{maxbytes, MaxBytes}]) when MaxBytes >= ?MIN_BYTES ->
-	{ok, Index} = db_init(),
-    {ok, #state{index=Index, wordsize=erlang:system_info(wordsize), maxbytes=MaxBytes}};
-
-init(_) ->
-	erlang:error("The value of maxbytes must be greater than 100 kb.").
-
-db_init() ->
-	case mnesia:create_schema([node()]) of
-		ok -> 
-			ok = mnesia:start(),
-		    ok = mnesia:wait_for_tables(mnesia:system_info(local_tables), infinity),
-			ok = lrb:create_counter_table(),
-			ok = lrb:create_config_table(),
-			{ok, lrb:lookup_log_index()};
-		{error,{_,{already_exists,_}}} -> 
-			io:format("schema already exists~n"),
-			ok = mnesia:start(),
-		    ok = mnesia:wait_for_tables(mnesia:system_info(local_tables), infinity),
-			case lrb:table_exists(log_roller_config) of
-				false ->
-					ok = lrb:create_counter_table(),
-					ok = lrb:create_config_table();
-				true -> ok
-			end,
-			{ok, lrb:lookup_log_index()}
-	end.
+init(_) ->	
+	{ok, #state{listening_pids=[]}}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_event/2
@@ -79,39 +51,39 @@ db_init() ->
 %%          remove_handler                              
 %%----------------------------------------------------------------------
 handle_event({error, _Gleader, {Pid, Format, Data}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=error, node=node(Pid), time=erlang:localtime(), message=msg(Format, Data)}),
+	{ok, State1} = commit(State, #log_entry{type=error, node=atom_to_list(node(Pid)), time=erlang:localtime(), message=msg(Format, Data)}),
 	{ok, State1};
 	
 handle_event({error_report, _Gleader, {Pid, std_error, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=error, node=node(Pid), time=erlang:localtime(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=error, node=atom_to_list(node(Pid)), time=erlang:localtime(), message=Report}),
 	{ok, State1};
 	
 handle_event({error_report, _Gleader, {Pid, Type, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=Type, node=node(Pid), time=erlang:localtime(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(node(Pid)), time=erlang:localtime(), message=Report}),
 	{ok, State1};
 	
 handle_event({warning_msg, _Gleader, {Pid, Format, Data}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=warning, node=node(Pid), time=erlang:localtime(), message=msg(Format, Data)}),
+	{ok, State1} = commit(State, #log_entry{type=warning, node=atom_to_list(node(Pid)), time=erlang:localtime(), message=msg(Format, Data)}),
 	{ok, State1};
 		
 handle_event({warning_report, _Gleader, {Pid, std_warning, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=warning, node=node(Pid), time=erlang:localtime(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=warning, node=atom_to_list(node(Pid)), time=erlang:localtime(), message=Report}),
 	{ok, State1};
 		
 handle_event({warning_report, _Gleader, {Pid, Type, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=Type, node=node(Pid), time=erlang:localtime(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(node(Pid)), time=erlang:localtime(), message=Report}),
 	{ok, State1};
 		
 handle_event({info_msg, _Gleader, {Pid, Format, Data}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=info, node=node(Pid), time=erlang:localtime(), message=msg(Format, Data)}),
+	{ok, State1} = commit(State, #log_entry{type=info, node=atom_to_list(node(Pid)), time=erlang:localtime(), message=msg(Format, Data)}),
 	{ok, State1};
 		
 handle_event({info_report, _Gleader, {Pid, std_info, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=info, node=node(Pid), time=erlang:localtime(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=info, node=atom_to_list(node(Pid)), time=erlang:localtime(), message=Report}),
 	{ok, State1};
 		
 handle_event({info_report, _Gleader, {Pid, Type, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=Type, node=node(Pid), time=erlang:localtime(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(node(Pid)), time=erlang:localtime(), message=Report}),
 	{ok, State1};
 
 handle_event(_, State) ->
@@ -123,7 +95,14 @@ handle_event(_, State) ->
 %%          {swap_handler, Reply, Args1, State1, Mod2, Args2} |
 %%          {remove_handler, Reply}                            
 %%----------------------------------------------------------------------
+handle_call({subscribe, Pid}, State) ->
+	io:format("handle call ~p~n", [Pid]),
+	Pids = State#state.listening_pids,
+	State1 = State#state{listening_pids=[Pid|Pids]},
+	{ok, ok, State1};
+	
 handle_call(_Request, State) ->
+	io:format("handle other call: ~p~n", [_Request]),
     Reply = ok,
     {ok, Reply, State}.
 
@@ -149,21 +128,15 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%----------------------------------------------------------------------
 	
-commit(#state{index=Index0, wordsize=WordSize, maxbytes=MaxBytes}=State, Log) ->
-	TableSize = mnesia:table_info(lrb:table_name(Index0), memory),
-	{ok, Index} =
-		if 
-			TableSize * WordSize >= (MaxBytes / ?NUM_TABLES) ->
-				Index1 = lrb:next_index(Index0),
-				ok = lrb:switch_log_tables(Index1),
-				{ok, Index1};	
-			true -> 
-				{ok, Index0}
-		end,
-	NextID = (catch mnesia:dirty_update_counter(log_roller_counter, log_entry, 1)),
-	%io:format("next id: ~p~n", [NextID]),
-	ok = mnesia:dirty_write(lrb:table_name(Index), Log#log_entry{id=NextID}),
-	{ok, State#state{index=Index}}.
+commit(State, Log) ->
+	io:format("commit with ~p: ~p~n", [State, Log]),
+	ok = broadcast(Log, State#state.listening_pids),
+	{ok, State}.
+
+broadcast(_, []) -> ok;
+broadcast(Log, [Pid|Tail]) when is_pid(Pid) ->
+	Pid ! {log_roller, self(), Log},
+	broadcast(Log, Tail).
 
 msg(Format, Args) ->
 	lists:flatten(io_lib:format(Format, Args)).

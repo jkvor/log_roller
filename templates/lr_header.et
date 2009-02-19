@@ -1,15 +1,11 @@
-<%? {data, Prefix, Node, Max, Type, Grep} = Data %>
+<%? {data, Prefix, Max, Type, Node, Grep} = Data %>
 <div id="header">
-<form method="get" action="<% Prefix %>/log">
+<form method="get" action="<% Prefix %>/logs">
 	<table>
-		<tr>
-			<td>Max:</td>
-			<td><input type="text" name="max" value="<% Max %>"/></td>
-		</tr>
 		<tr>
 			<td>Type:</td>
 			<td>
-				<select name="type">
+				<select multiple size="4" name="type" style="width: 250px;">
 					<option value="all" <% selected("all", Type) %>>All</option>
 					<option value="progress" <% selected("progress", Type) %>>Progress</option>
 					<option value="info" <% selected("info", Type) %>>Info</option>
@@ -18,8 +14,24 @@
 			</td>
 		</tr>
 		<tr>
-			<td>Grep:</td>
-			<td><input type="text" name="grep" value="<% Grep %>"/></td>
+			<td>Node:</td>
+			<td>
+				<select multiple size="4" name="node" style="width: 250px;">
+					<% [print_node(atom_to_list(Node0), Node) || Node0 <- [node()|nodes()]] %>
+				</select>
+			</td>
+		</tr>
+		<tr>
+			<td>Grep:&nbsp;&nbsp;</td>
+			<td><input type="text" name="grep" value="<% Grep %>" style="width: 250px;"/></td>
+		</tr>
+		<tr>
+			<td>Max:</td>
+			<td><input type="text" name="max" value="<% Max %>" style="width: 250px;"/></td>
+		</tr>
+		<tr>
+			<td></td>
+			<td><input type="submit" value="Reload"/></td>
 		</tr>
 	</table>
 </form>
@@ -27,3 +39,8 @@
 <%@ selected(Type, Type) %>
 selected="yes"
 <%@ selected(_, _) %>
+
+<%@ print_node(Node, Node) %>
+<option value="<% Node %>" selected="yes"><% Node %></option>
+<%@ print_node(Node0, Node) %>
+<option value="<% Node0 %>"><% Node0 %></option>

@@ -1,31 +1,17 @@
-<%? {data, Prefix, Nodes, Content} = Data %>
+<%? {data, Prefix, Content} = Data %>
 <html>
 <head>
 	<title>Log Roller</title>
 	<style type="text/css">
 		body {
 			color: #666666;
-		}
-	
-		div#nodes {
-			overflow: auto; 
-			display: block; 
-			float: left; 
-			width: 250px; 
-			height: 95%;
-			border: solid 1px #EEEEEE;
-			margin: 5px;
-			padding: 5px;
+			margin: 10px;
 		}
 
 		div#content {
-			overflow: auto; 
-			display: block;
-			float: left; 
-			width: 800px; 
-			height: 95%;
+			width: 100%; 
+			height: 100%;
 			border: solid 1px #EEEEEE;
-			margin: 5px;
 			padding: 5px;
 			color: #666666;
 		}
@@ -50,15 +36,8 @@
 	</style>
 </head>
 <body>
-	<div id="nodes">
-		<h3>Nodes</h3>
-		<% [print_node(Prefix, Node) || Node <- Nodes] %>
-	</div>
 	<div id="content">
 		<% Content %>
 	</div>
 </body>
 </html>
-
-<%@ print_node(Prefix, Node) %>
-<% Node %>

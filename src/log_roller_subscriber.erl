@@ -54,9 +54,14 @@ start() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_) ->
+	LogFile =
+		case application:get_env(log_roller, log_dir) of
+			undefined -> atom_to_list(?LOG_NAME);
+			Dir -> Dir ++ "/" ++ atom_to_list(?LOG_NAME)
+		end,
 	Args = [
 		{name, ?LOG_NAME},
-		%{file, ""}
+		{file, LogFile},
 		{type, wrap},
 		{size, {1024, 10}}
 	],
@@ -110,23 +115,37 @@ chunk(Log, Opts, Continuation, Acc) ->
 			io:format("error: ~p~n", [_Reason]),
 			Acc;
 		{Continuation1, Terms} ->
-			Terms1 = filter(Terms, Opts),
-			chunk(Log, Opts, Continuation1, [Terms1|Acc]);
+			Acc1 = filter(Acc, Terms, Opts),
+			chunk(Log, Opts, Continuation1, Acc1);
 		{Continuation1, Terms, _Badbytes} ->
-			Terms1 = filter(Terms, Opts),
-			chunk(Log, Opts, Continuation1, [Terms1|Acc])
+			Acc1 = filter(Acc, Terms, Opts),
+			chunk(Log, Opts, Continuation1, Acc1)
 	end.
 	
-filter(Terms, Opts) ->
+filter(Acc0, Terms, Opts) ->
+	Max   = proplists:get_value(max, Opts, 100),
 	Type0 = proplists:get_value(type, Opts, all),
 	Node0 = proplists:get_value(node, Opts),
+	Grep0 = 
+		case proplists:get_value(grep, Opts) of
+			undefined -> undefined;
+			Val ->
+				case re:compile(Val) of
+					{ok, MP} -> MP;
+					_ -> undefined
+				end
+		end,
 	
 	Type_Fun = 
 		fun(Type) ->
 			case Type0 of
 				all -> true;
 				Type when is_atom(Type) -> true;
-				Types when is_list(Types) -> lists:member(Type, Types);
+				Types when is_list(Types) ->
+					case lists:member(all, Types) of
+						true -> true;
+						false -> lists:member(Type, Types)
+					end;
 				_ -> false
 			end
 		end,
@@ -141,13 +160,28 @@ filter(Terms, Opts) ->
 			end
 		end,
 		
+	Grep_Fun =
+		fun(Grep) ->
+			case Grep0 of
+				undefined -> true;
+				_ ->
+					Subject = lists:flatten(io_lib:format("~p", [Grep])),
+					case re:run(Subject,Grep0) of
+						{match, _} -> true;
+						nomatch -> false
+					end
+			end
+		end,
+		
 	lists:foldl(
-		fun({log_entry, _ID, Type, Node, _Time, _Msg} = Term, Acc) ->
-			case [ Type_Fun(Type), Node_Fun(Node) ] of
-				[true, true] -> [Term|Acc];
+		fun({log_entry, Time, Type, Node, Msg}, Acc) ->
+			Term = [format_time(Time), Type, Node, Msg],
+			case [ Type_Fun(Type), Node_Fun(Node), Grep_Fun(Term) ] of
+				[true, true, true] when length(Acc) < Max -> [Term|Acc];
 				_ -> Acc
 			end
-		end, [], Terms).
+		end, Acc0, Terms).
 	
-format_time({{Y,Mo,D},{H,Mi,S}}) ->
-	lists:flatten(io_lib:format("~w-~2.2.0w-~2.2.0w ~2.2.0w:~2.2.0w:~2.2.0w", [Y,Mo,D,H,Mi,S])).	
+format_time({Mega,Secs,Micro}) ->
+	{{Y,Mo,D},{H,Mi,S}} = calendar:now_to_local_time({Mega,Secs,Micro}),
+	lists:flatten(io_lib:format("~w-~2.2.0w-~2.2.0w ~2.2.0w:~2.2.0w:~2.2.0w:~w", [Y,Mo,D,H,Mi,S,Micro])).	

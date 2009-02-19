@@ -34,18 +34,22 @@ config_data() ->
 			]}.
 
 index(_Env,_Input) ->
-	lr_frame:render({data, ?TOOL_BASE_URL, "<H3>Select a node from the list</H3><-- ^_^"}).
+	display([{"max", "20"}]).
 
 logs(_Env, Input) ->
 	display(httpd:parse_query(Input)).
 	
 display(QS) ->
 	io:format("webtool display: ~p~n", [QS]),
-	Node = proplists:get_value("node", QS, ""),
 	Opts = lists:foldl(
 		fun ({_, ""}, Acc0) -> Acc0;
 			({"max",Val}, Acc0) -> [{max, list_to_integer(Val)}|Acc0];
-			({"type",Val}, Acc0) -> [{type, list_to_atom(Val)}|Acc0];
+			({"type",Val}, Acc0) -> 
+				Types = [list_to_atom(Type) || Type <- string:tokens(Val, ",")],
+				[{type, Types}|Acc0];
+			({"node",Val}, Acc0) -> 
+				Nodes = string:tokens(Val, ","),
+				[{node, Nodes}|Acc0];
 			({Key,Val}, Acc0) -> [{list_to_atom(Key), Val}|Acc0]
 		end, [], QS),
 		
@@ -53,14 +57,13 @@ display(QS) ->
 	case (catch log_roller_subscriber:fetch(Opts)) of
 		List when is_list(List) ->
 			io:format("fetch success: ~p~n", [List]),
-			Header = lr_header:render({data, ?TOOL_BASE_URL, Node, 
+			Header = lr_header:render({data, ?TOOL_BASE_URL, 
 						proplists:get_value("max", QS, ""), 
 						proplists:get_value("type", QS, "all"), 
+						proplists:get_value("node", QS, ""),
 						proplists:get_value("grep", QS, "")}),
-			Content = lr_logs:render({data, ?TOOL_BASE_URL, Node, lists:reverse(List)}),
-			Nodes = log_roller_subscriber:unique_nodes(),
-			io:format("nodes: ~p~n", [Nodes]),
-			lr_frame:render({data, ?TOOL_BASE_URL, Nodes, [Header, Content]});
+			Content = lr_logs:render({data, ?TOOL_BASE_URL, List}),
+			lr_frame:render({data, ?TOOL_BASE_URL, [Header, Content]});
 		Err ->
 			io:format("fetch erer: ~p~n", [Err]),
 			Err

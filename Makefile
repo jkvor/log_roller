@@ -19,6 +19,7 @@ install: rel
 	for i in ebin/*.beam include/* priv/* ebin/*.app; do install $$i ${LIBDIR}/log_roller-$(VERSION)/$$i ; done
 	cp log_roller.boot $(ROOTDIR)/bin/
 	mkdir -p /etc/init.d
+	mkdir -p /var/log/log_roller
 	cp log_roller /etc/init.d/
 
 package: clean

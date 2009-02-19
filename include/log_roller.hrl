@@ -26,4 +26,4 @@
 
 -record(log_roller_counter, {key, value}).
 -record(log_roller_config, {key, value}).
--record(log_entry, {id, type, node, time, message}).
+-record(log_entry, {time, type, node, message}).

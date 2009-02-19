@@ -21,6 +21,11 @@ install: rel
 	mkdir -p /etc/init.d
 	mkdir -p /var/log/log_roller
 	cp log_roller /etc/init.d/
+	
+uninstall:
+	rm -rf ${LIBDIR}/log_roller-*
+	rm $(ROOTDIR)/bin/log_roller.boot
+	rm /etc/init.d/log_roller
 
 package: clean
 	@mkdir log_roller-$(VERSION)/ && cp -rf ebin include log_roller Makefile priv README src templates log_roller-$(VERSION)

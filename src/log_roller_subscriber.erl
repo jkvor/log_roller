@@ -57,13 +57,13 @@ init(_) ->
 	LogFile =
 		case application:get_env(log_roller, log_dir) of
 			undefined -> atom_to_list(?LOG_NAME);
-			Dir -> Dir ++ "/" ++ atom_to_list(?LOG_NAME)
+			{ok, Dir} -> Dir ++ "/" ++ atom_to_list(?LOG_NAME)
 		end,
 	Args = [
 		{name, ?LOG_NAME},
 		{file, LogFile},
 		{type, wrap},
-		{size, {1024, 10}}
+		{size, {10485760, 10}}
 	],
 	case disk_log:open(Args) of
 		{ok, Log} ->
@@ -71,6 +71,7 @@ init(_) ->
 		{repaired, Log, {recovered, _Rec}, {badbytes, _Bad}} ->
 			{ok, #state{log=Log}};
 		Err ->
+			io:format("init error: ~p~n", [Err]),
 			{error, Err}
 	end.
 
@@ -79,7 +80,8 @@ handle_call({subscribe_to, Node}, _From, State) ->
 	{reply, Res, State};
 
 handle_call({fetch, Opts}, _From, #state{log=Log}=State) ->
-	Res = chunk(Log, Opts, start, []),
+	Max = proplists:get_value(max, Opts, 100),
+	Res = chunk(Log, Opts, start, [], Max),
 	{reply, Res, State};
 		
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
@@ -107,7 +109,8 @@ write_log(#state{log=Log}=State, LogEntry) ->
 	ok = disk_log:log(Log, LogEntry),
 	{ok, State}.
 
-chunk(Log, Opts, Continuation, Acc) ->
+chunk(_, _, _, Acc, Max) when length(Acc) >= Max -> Acc;
+chunk(Log, Opts, Continuation, Acc, Max) ->
 	case disk_log:chunk(Log, Continuation) of
 		eof ->
 			Acc;
@@ -115,15 +118,15 @@ chunk(Log, Opts, Continuation, Acc) ->
 			io:format("error: ~p~n", [_Reason]),
 			Acc;
 		{Continuation1, Terms} ->
-			Acc1 = filter(Acc, Terms, Opts),
-			chunk(Log, Opts, Continuation1, Acc1);
+			io:format("terms: ~p~n", [Terms]),
+			Acc1 = filter(Acc, lists:reverse(Terms), Opts, Max),
+			chunk(Log, Opts, Continuation1, Acc1, Max);
 		{Continuation1, Terms, _Badbytes} ->
-			Acc1 = filter(Acc, Terms, Opts),
-			chunk(Log, Opts, Continuation1, Acc1)
+			Acc1 = filter(Acc, lists:reverse(Terms), Opts, Max),
+			chunk(Log, Opts, Continuation1, Acc1, Max)
 	end.
 	
-filter(Acc0, Terms, Opts) ->
-	Max   = proplists:get_value(max, Opts, 100),
+filter(Acc0, Terms, Opts, Max) ->
 	Type0 = proplists:get_value(type, Opts, all),
 	Node0 = proplists:get_value(node, Opts),
 	Grep0 = 

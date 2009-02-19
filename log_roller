@@ -1,6 +1,6 @@
 #!/bin/sh
 
-ROOT_DIR=`erl -eval 'io:format("~p~n", [code:lib_dir("log_roller")])' -s init stop -noshell`
+ROOT_DIR=`erl -eval 'io:format("~s~n", [code:lib_dir("log_roller")])' -s init stop -noshell`
 HOSTNAME=`case \`uname\` in Darwin ) echo \`hostname\`;; * ) echo \`hostname --fqdn\`;; esac`
 SASL='-sasl sasl_error_logger false -sasl errlog_type all -sasl error_logger_mf_dir "/var/log/log_roller" -sasl error_logger_mf_maxbytes 10485760 -sasl error_logger_mf_maxfiles 1'
 

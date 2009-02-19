@@ -129,7 +129,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%%----------------------------------------------------------------------
 	
 commit(State, Log) ->
-	io:format("commit with ~p: ~p~n", [State, Log]),
 	ok = broadcast(Log, State#state.listening_pids),
 	{ok, State}.
 

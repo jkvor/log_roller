@@ -1,4 +1,4 @@
-<%? {data, Prefix, Node, Max, Type, Grep, View} = Data %>
+<%? {data, Prefix, Node, Max, Type, Grep} = Data %>
 <div id="header">
 <form method="get" action="<% Prefix %>/log">
 	<table>
@@ -21,21 +21,9 @@
 			<td>Grep:</td>
 			<td><input type="text" name="grep" value="<% Grep %>"/></td>
 		</tr>
-		<tr>
-			<td></td>
-			<td>
-				<input type="submit" value="Reload" />
-				<input type="radio" name="view" value="list" <% checked("list", View) %>>List
-				<input type="radio" name="view" value="show" <% checked("show", View) %>>Details
-				<input type="hidden" name="name" value="<% Node %>" />
-			</td>
-		</tr>
 	</table>
 </form>
 </div>
 <%@ selected(Type, Type) %>
 selected="yes"
 <%@ selected(_, _) %>
-<%@ checked(View, View) %>
-checked
-<%@ checked(_, _) %>

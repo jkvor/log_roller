@@ -23,7 +23,7 @@
 -module(lr_webtool).
 
 -export([config_data/0]).
--export([index/2, log/2]).
+-export([index/2, logs/2]).
 
 -define(WEBTOOL_ARGS, [standard_path, [{port,4057},{bind_address,{0,0,0,0}},{server_name,"localhost"}]]).
 -define(TOOL_BASE_URL, "/log_roller/lr_webtool").
@@ -36,43 +36,32 @@ config_data() ->
 index(_Env,_Input) ->
 	lr_frame:render({data, ?TOOL_BASE_URL, "<H3>Select a node from the list</H3><-- ^_^"}).
 
-log(_Env, Input) ->
-	QS0 = httpd:parse_query(Input),
-	{Node, QS1} = get_and_remove("name", QS0, ""),
-	{View, QS2} = get_and_remove("view", QS1, "list"),
-	display(Node, View, QS2).
+logs(_Env, Input) ->
+	display(httpd:parse_query(Input)).
 	
-display(Node, View, QS) ->
-	Args = lists:foldl(
+display(QS) ->
+	io:format("webtool display: ~p~n", [QS]),
+	Node = proplists:get_value("node", QS, ""),
+	Opts = lists:foldl(
 		fun ({_, ""}, Acc0) -> Acc0;
+			({"max",Val}, Acc0) -> [{max, list_to_integer(Val)}|Acc0];
 			({"type",Val}, Acc0) -> [{type, list_to_atom(Val)}|Acc0];
-			({"id",Val}, Acc0) -> [{id, list_to_integer(Val)}|Acc0];
-			({"max",Val}, Acc0) -> [{max, list_to_integer(Val)}|Acc0];	
 			({Key,Val}, Acc0) -> [{list_to_atom(Key), Val}|Acc0]
 		end, [], QS),
-	case node_call(Node, list_to_atom(View), [Args]) of
-		{error,Reason} -> 
-			Reason;
-		List ->
+		
+	io:format("options: ~p~n", [Opts]),
+	case (catch log_roller_subscriber:fetch(Opts)) of
+		List when is_list(List) ->
+			io:format("fetch success: ~p~n", [List]),
 			Header = lr_header:render({data, ?TOOL_BASE_URL, Node, 
 						proplists:get_value("max", QS, ""), 
 						proplists:get_value("type", QS, "all"), 
-						proplists:get_value("grep", QS, ""), 
-						View}
-					),
-			Content = erlang:apply(list_to_atom("lr_" ++ View), render, [{data, ?TOOL_BASE_URL, Node, lists:reverse(List)}]),
-			lr_frame:render({data, ?TOOL_BASE_URL, [Header, Content]})
-	end.
-	
-node_call(Node, Func, Args) ->
-	case catch rpc:call(list_to_atom(Node), lrb, Func, Args) of
-		{badrpc, Reason} -> {error, Reason};
-		Resp when is_binary(Resp) -> binary_to_list(Resp);
-		Resp -> Resp
-	end.
-	
-get_and_remove(Key, List, Default) ->
-	case lists:keytake(Key, 1, List) of
-		{value, {Key, Value}, List1} -> {Value, List1};
-		false -> {Default, List}
+						proplists:get_value("grep", QS, "")}),
+			Content = lr_logs:render({data, ?TOOL_BASE_URL, Node, lists:reverse(List)}),
+			Nodes = log_roller_subscriber:unique_nodes(),
+			io:format("nodes: ~p~n", [Nodes]),
+			lr_frame:render({data, ?TOOL_BASE_URL, Nodes, [Header, Content]});
+		Err ->
+			io:format("fetch erer: ~p~n", [Err]),
+			Err
 	end.

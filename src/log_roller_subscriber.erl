@@ -27,7 +27,7 @@
 -export([start/0, init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([terminate/2, code_change/3]).
 
--export([subscribe_to/1, fetch/0, fetch/1]).
+-export([subscribe_to/1, fetch/0, fetch/1, unique_nodes/0]).
 
 -include_lib("stdlib/include/qlc.hrl").
 -include("log_roller.hrl").
@@ -117,6 +117,14 @@ create_log_table() ->
 			ok
 	end.
 	
+unique_nodes() ->
+	QH = qlc:q([Node || {log_entry, _, _, Node, _, _} <- mnesia:table(log_roller_logs)], {unique, true}),
+	F = fun() -> qlc:eval(QH) end,
+	case mnesia:transaction(F) of
+		{atomic, Res} -> Res;
+		_ -> []
+	end.
+	
 match_objects(Opts) ->
 	Max = proplists:get_value(max, Opts, 100),
 	
@@ -139,14 +147,17 @@ match_objects(Opts) ->
 			case proplists:get_value(node, Opts) of
 				undefined ->
 					true;
-				Node0 when is_atom(Node0) ->
+				Node0 when is_list(Node0) ->
 					true;
 				_ ->
 					false
 			end
 		end,
 
-	QH = qlc:q([X || X <- mnesia:table(log_roller_logs), Type_Fun(X#log_entry.type), Node_Fun(X#log_entry.node)]),
+	QH = qlc:q([[ID, Type, Node, format_time(Time), Msg] 
+				 || {log_entry, ID, Type, Node, Time, Msg} 
+				  <- mnesia:table(log_roller_logs), Type_Fun(Type), Node_Fun(Node)
+			    ]),
 	F = fun() ->
 			QC = qlc:cursor(QH),
 			case (catch qlc:next_answers(QC, Max)) of
@@ -166,4 +177,6 @@ match_objects(Opts) ->
 		Err ->
 			Err
 	end.
-	
+
+format_time({{Y,Mo,D},{H,Mi,S}}) ->
+	lists:flatten(io_lib:format("~w-~2.2.0w-~2.2.0w ~2.2.0w:~2.2.0w:~2.2.0w", [Y,Mo,D,H,Mi,S])).	

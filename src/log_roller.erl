@@ -55,7 +55,8 @@ start_phase(world, _, _) ->
 	case init:get_argument(log_roller_type) of 
 		{ok,[["subscriber"]]} ->
 			[log_roller_subscriber:subscribe_to(Node) || Node <- nodes()];
-		_ -> ok
+		_ -> 
+			[log_roller_h:register_subscriber(Node) || Node <- nodes()]
 	end,
 	ok.
 	

@@ -27,7 +27,7 @@
 -export([start/0, init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([terminate/2, code_change/3]).
 
--export([subscribe_to/1, current_location/0]).
+-export([subscribe_to/1, ping/0, current_location/0]).
 
 -include("log_roller.hrl").
 
@@ -68,6 +68,9 @@ handle_call({subscribe_to, Node}, _From, State) ->
 	Res = gen_event:call({error_logger, Node}, log_roller_h, {subscribe, self()}),
 	{reply, Res, State};
 
+handle_call(ping, _From, State) ->
+	{reply, {ok, self()}, State};
+	
 handle_call(current_location, _From, #state{log=Log, args=Args}=State) ->
 	Infos = disk_log:info(Log),
 	FileStub = proplists:get_value(file, Args),
@@ -101,5 +104,8 @@ subscribe_to(Node) when is_list(Node) -> subscribe_to(list_to_atom(Node));
 subscribe_to(Node) when is_atom(Node) ->
 	gen_server:call(?MODULE, {subscribe_to, Node}).
 
+ping() ->
+	gen_server:call(?MODULE, ping).
+	
 current_location() ->
 	gen_server:call(?MODULE, current_location).

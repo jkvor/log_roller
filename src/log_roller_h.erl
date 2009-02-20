@@ -27,10 +27,21 @@
 %% gen_event callbacks
 -export([init/1, handle_event/2, handle_call/2, handle_info/2, terminate/2, code_change/3]).
 
+-export([register_subscriber/1]).
+
 -include("log_roller.hrl").
 
 -record(state, {listening_pids}).
 
+register_subscriber(Node) ->
+	case (catch rpc:call(Node, log_roller_subscriber, ping, [])) of
+		{ok, Pid} ->
+			io:format("ping successful for ~p~n", [Node]),
+			gen_event:call(error_logger, log_roller_h, {subscribe, Pid});
+		_ ->
+			ok
+	end.
+	
 %%%----------------------------------------------------------------------
 %%% Callback functions from gen_event
 %%%----------------------------------------------------------------------

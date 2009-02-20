@@ -51,6 +51,11 @@ init(_) ->
 
 start_phase(world, _, _) ->
 	(catch net_adm:world()),
+	case init:get_argument(log_roller_type) of 
+		{ok,[["subscriber"]]} ->
+			[log_roller_subscriber:subscribe_to(Node) || Node <- nodes()];
+		_ -> ok
+	end,
 	ok.
 	
 start_webtool() -> start_webtool(8888, {0,0,0,0}, "localhost").

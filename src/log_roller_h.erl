@@ -95,10 +95,17 @@ handle_event(_, State) ->
 %%          {swap_handler, Reply, Args1, State1, Mod2, Args2} |
 %%          {remove_handler, Reply}                            
 %%----------------------------------------------------------------------
-handle_call({subscribe, Pid}, State) ->
-	io:format("handle call ~p~n", [Pid]),
+handle_call({subscribe, Pid0}, State) ->
+	Pid = pid_to_list(Pid0),
 	Pids = State#state.listening_pids,
-	State1 = State#state{listening_pids=[Pid|Pids]},
+	State1 =
+		case lists:member(Pid, Pids) of
+			false ->
+				io:format("register pid ~p~n", [Pid]),
+				State#state{listening_pids=[Pid|Pids]};
+			true ->
+				State
+		end,
 	{ok, ok, State1};
 	
 handle_call(_Request, State) ->
@@ -133,8 +140,8 @@ commit(State, Log) ->
 	{ok, State}.
 
 broadcast(_, []) -> ok;
-broadcast(Log, [Pid|Tail]) when is_pid(Pid) ->
-	Pid ! {log_roller, self(), Log},
+broadcast(Log, [Pid|Tail]) when is_list(Pid) ->
+	list_to_pid(Pid) ! {log_roller, self(), Log},
 	broadcast(Log, Tail).
 
 msg(Format, Args) ->

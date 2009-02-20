@@ -31,9 +31,10 @@
 
 -include("log_roller.hrl").
 
--record(state, {log}).
+-record(state, {log, args}).
 -define(LOG_NAME, log_roller_data).
-
+-define(MAX_CHUNK_SIZE, 65536).
+	
 subscribe_to(Node) when is_list(Node) -> subscribe_to(list_to_atom(Node));
 subscribe_to(Node) when is_atom(Node) ->
 	gen_server:call(?MODULE, {subscribe_to, Node}).
@@ -63,13 +64,14 @@ init(_) ->
 		{name, ?LOG_NAME},
 		{file, LogFile},
 		{type, wrap},
-		{size, {10485760, 10}}
+		%{size, {10485760, 10}}
+		{size, {132072, 2}}
 	],
 	case disk_log:open(Args) of
 		{ok, Log} ->
-			{ok, #state{log=Log}};
+			{ok, #state{log=Log, args=Args}};
 		{repaired, Log, {recovered, _Rec}, {badbytes, _Bad}} ->
-			{ok, #state{log=Log}};
+			{ok, #state{log=Log, args=Args}};
 		Err ->
 			io:format("init error: ~p~n", [Err]),
 			{error, Err}
@@ -79,9 +81,16 @@ handle_call({subscribe_to, Node}, _From, State) ->
 	Res = gen_event:call({error_logger, Node}, log_roller_h, {subscribe, self()}),
 	{reply, Res, State};
 
-handle_call({fetch, Opts}, _From, #state{log=Log}=State) ->
+handle_call({fetch, Opts}, _From, #state{log=Log, args=Args}=State) ->
+	Infos = disk_log:info(Log),
+	FileStub = proplists:get_value(file, Infos),
+	CurrentFileNum = proplists:get_value(current_file, Infos),
+	CurrentBytes = proplists:get_value(no_current_bytes, Infos),
+	FileName = lists:flatten(io_lib:format("~s.~w", [FileStub, CurrentFileNum])),
+	
+	{Cont0,_} = disk_log:chunk(Log, start, 1),
 	Max = proplists:get_value(max, Opts, 100),
-	Res = chunk(Log, Opts, start, [], Max),
+	Res = chunk(State, Opts, next_continuation(Args, Cont0), [], Max),
 	{reply, Res, State};
 		
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
@@ -110,7 +119,8 @@ write_log(#state{log=Log}=State, LogEntry) ->
 	{ok, State}.
 
 chunk(_, _, _, Acc, Max) when length(Acc) >= Max -> Acc;
-chunk(Log, Opts, Continuation, Acc, Max) ->
+chunk(#state{log=Log, args=Args}=State, Opts, Continuation, Acc, Max) ->
+	io:format("reading for ~p~n", [Continuation]),
 	case disk_log:chunk(Log, Continuation) of
 		eof ->
 			Acc;
@@ -118,12 +128,40 @@ chunk(Log, Opts, Continuation, Acc, Max) ->
 			io:format("error: ~p~n", [_Reason]),
 			Acc;
 		{Continuation1, Terms} ->
-			io:format("terms: ~p~n", [Terms]),
+			io:format("terms for ~p: ~p~n", [Continuation, Terms]),
 			Acc1 = filter(Acc, lists:reverse(Terms), Opts, Max),
-			chunk(Log, Opts, Continuation1, Acc1, Max);
+			chunk(State, Opts, next_continuation(Args, Continuation1), Acc1, Max);
 		{Continuation1, Terms, _Badbytes} ->
 			Acc1 = filter(Acc, lists:reverse(Terms), Opts, Max),
-			chunk(Log, Opts, Continuation1, Acc1, Max)
+			chunk(State, Opts, next_continuation(Args, Continuation1), Acc1, Max)
+	end.
+	
+next_continuation(Args, {continuation, Pid, {Index, Pos}, Bin}=Orig) ->
+	io:format("next after ~p~n", [Orig]),
+		
+	{Size,Num} = proplists:get_value(size, Args),
+	
+	if 
+		Pos > (2 * ?MAX_CHUNK_SIZE) -> 
+			{continuation, Pid, {Index, Pos - (2 * ?MAX_CHUNK_SIZE)}, []};
+		true ->
+			Index1 = if Index =< 1 -> Num; true -> Index-1 end,
+			Pos1 = if Size > ?MAX_CHUNK_SIZE -> Size-?MAX_CHUNK_SIZE; true -> 0 end,
+			{continuation, Pid, {Index1, Pos1}, []}
+	end.
+	
+file_handle(FileName, Handles) ->
+	case dict:find(FileName, Handles) of
+		{ok, IoDevice} ->
+			{ok, Handles, IoDevice};
+		error ->
+			case file:open(FileName, [read]) of
+				{ok, IoDevice} ->
+					Handles1 = dict:store(FileName, IoDevice, Handles),
+					{ok, Handles1, IoDevice};
+				_ ->
+					{ok, Handles, error}
+			end
 	end.
 	
 filter(Acc0, Terms, Opts, Max) ->

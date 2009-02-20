@@ -46,7 +46,8 @@ stop(_) ->
 	
 init(_) ->
 	{ok, {{one_for_one, 10, 10}, [
-	    {log_roller_subscriber, {log_roller_subscriber, start, []}, permanent, 5000, worker, [log_roller_subscriber]}
+	    {log_roller_subscriber, {log_roller_subscriber, start, []}, permanent, 5000, worker, [log_roller_subscriber]},
+		{log_roller_browser, {log_roller_browser, start, []}, permanent, 5000, worker, [log_roller_browser]}
 	]}}.
 
 start_phase(world, _, _) ->

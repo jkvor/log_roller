@@ -120,7 +120,7 @@ write_log(#state{log=Log}=State, LogEntry) ->
 
 chunk(_, _, _, Acc, Max) when length(Acc) >= Max -> Acc;
 chunk(#state{log=Log, args=Args}=State, Opts, Continuation, Acc, Max) ->
-	io:format("reading for ~p~n", [Continuation]),
+	io:format("reading for ~p~n", [setelement(4, Continuation, [])]),
 	case disk_log:chunk(Log, Continuation) of
 		eof ->
 			Acc;
@@ -128,7 +128,7 @@ chunk(#state{log=Log, args=Args}=State, Opts, Continuation, Acc, Max) ->
 			io:format("error: ~p~n", [_Reason]),
 			Acc;
 		{Continuation1, Terms} ->
-			io:format("terms for ~p: ~p~n", [Continuation, Terms]),
+			io:format("terms for ~p: ~p~n", [setelement(4, Continuation, []), Terms]),
 			Acc1 = filter(Acc, lists:reverse(Terms), Opts, Max),
 			chunk(State, Opts, next_continuation(Args, Continuation1), Acc1, Max);
 		{Continuation1, Terms, _Badbytes} ->
@@ -137,7 +137,7 @@ chunk(#state{log=Log, args=Args}=State, Opts, Continuation, Acc, Max) ->
 	end.
 	
 next_continuation(Args, {continuation, Pid, {Index, Pos}, Bin}=Orig) ->
-	io:format("next after ~p~n", [Orig]),
+	io:format("next after ~p~n", [setelement(4, Orig, [])]),
 		
 	{Size,Num} = proplists:get_value(size, Args),
 	

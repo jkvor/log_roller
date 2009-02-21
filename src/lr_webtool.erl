@@ -44,17 +44,13 @@ display(QS) ->
 	Opts = lists:foldl(
 		fun ({_, ""}, Acc0) -> Acc0;
 			({"max",Val}, Acc0) -> [{max, list_to_integer(Val)}|Acc0];
-			({"type",Val}, Acc0) -> 
-				Types = [list_to_atom(Type) || Type <- string:tokens(Val, ",")],
-				[{type, Types}|Acc0];
-			({"node",Val}, Acc0) -> 
-				Nodes = string:tokens(Val, ","),
-				[{node, Nodes}|Acc0];
+			({"type",Val}, Acc0) -> [{type, list_to_atom(Val)}|Acc0];
+			({"node",Val}, Acc0) -> [{node, Val}|Acc0];
 			({Key,Val}, Acc0) -> [{list_to_atom(Key), Val}|Acc0]
 		end, [], QS),
 		
 	io:format("options: ~p~n", [Opts]),
-	case (catch log_roller_subscriber:fetch(Opts)) of
+	case (catch log_roller_browser:fetch(Opts)) of
 		List when is_list(List) ->
 			io:format("fetch success: ~p~n", [List]),
 			Header = lr_header:render({data, ?TOOL_BASE_URL, 

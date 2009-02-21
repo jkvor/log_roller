@@ -5,17 +5,70 @@
 	<style type="text/css">
 		body {
 			color: #666666;
-			margin: 10px;
 		}
 
 		div#content {
-			width: 95%; 
-			height: 100%;
-			border: solid 1px #EEEEEE;
-			padding: 5px;
-			color: #666666;
+			width: 100%; 
 		}
-				
+		
+		span {
+			color: #000000;
+		}
+		
+		span.progress {
+			color: #336633;
+		}
+		
+		span.info {
+			color: #0066CC;
+		}
+		
+		span.error {
+			color: #990000;
+		}
+		
+		pre {
+			margin: 0px;
+			padding: 4px;
+			white-space: pre-wrap;       /* css-3 */
+			white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+			white-space: -pre-wrap;      /* Opera 4-6 */
+			white-space: -o-pre-wrap;    /* Opera 7 */
+			word-wrap: break-word;       /* Internet Explorer 5.5+ */
+		}
+		
+		pre.logs {
+			margin-bottom: 2px;
+			padding-left: 10px;
+			padding-right: 10px;
+			border: 1px dashed #EFEFEF;
+			background: #FFFFFF;
+		}
+		
+		pre.progress {
+			margin-bottom: 2px;
+			padding-left: 10px;
+			padding-right: 10px;
+			border: 1px solid #D4FED9;
+			background: #D4FED9;
+		}	
+		
+		pre.info {
+			margin-bottom: 2px;
+			padding-left: 10px;
+			padding-right: 10px;
+			border: 1px solid #DEEAFE;
+			background: #DEEAFE;
+		}
+		
+		pre.error {
+			margin-bottom: 2px;
+			padding-left: 10px;
+			padding-right: 10px;
+			border: 1px solid #FED9D4;
+			background: #FED9D4;
+		}
+			
 		a:link {
 			text-decoration: none;
 			color: #666666;
@@ -35,8 +88,8 @@
 		}
 	</style>
 </head>
-<body align="center">
-	<div id="content" align="left">
+<body>
+	<div id="content">
 		<% Content %>
 	</div>
 </body>

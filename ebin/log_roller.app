@@ -4,7 +4,8 @@
     {modules, [
         log_roller,
 		log_roller_h,
-		log_roller_subscriber
+		log_roller_subscriber,
+		log_roller_browser
     ]},
     {registered, []},
     {mod, {log_roller, []}},

@@ -72,9 +72,21 @@ start_phase(webtool, _, _) ->
 	end.
 		
 start_webtool() -> 
-	Port = application:get_env(log_roller, webtool_port, 8888),
-	BindAddr = application:get_env(log_roller, webtool_bindaddr, {0,0,0,0}),
-	Server = application:get_env(log_roller, webtool_server, "localhost"),
+	Port = 
+		case application:get_env(log_roller, webtool_port) of
+			undefined -> 8888;
+			{ok, Val1} -> Val1
+		end,
+	BindAddr = 
+		case application:get_env(log_roller, webtool_bindaddr) of
+			undefined -> {0,0,0,0};
+			{ok, Val2} -> Val2
+		end,
+	Server = 
+		case application:get_env(log_roller, webtool_server) of
+			undefined -> "localhost";
+			{ok, Val3} -> Val3
+		end,
 	start_webtool(Port, BindAddr, Server).
 	
 start_webtool(Port, BindAddr, ServerName) ->

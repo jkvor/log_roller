@@ -47,8 +47,16 @@ init(_) ->
 			undefined -> atom_to_list(?LOG_NAME);
 			{ok, Dir} -> Dir ++ "/" ++ atom_to_list(?LOG_NAME)
 		end,
-	Maxbytes = application:get_env(log_roller, maxbytes, 10485760),
-	Maxfiles = application:get_env(log_roller, maxfiles, 10),
+	Maxbytes = 
+		case application:get_env(log_roller, maxbytes) of
+			undefined -> 10485760;
+			{ok, Val1} -> Val1
+		end,
+	Maxfiles = 
+		case application:get_env(log_roller, maxfiles) of
+			undefined -> 10;
+			{ok, Val2} -> Val2
+		end,
 	Args = [
 		{name, ?LOG_NAME},
 		{file, LogFile},

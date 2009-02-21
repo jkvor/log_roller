@@ -1,9 +1,7 @@
 <%? {data, Prefix, List} = Data %>
 <% [print_log(Prefix, Entry) || Entry <- List] %>
-
 <%@ print_log(_Prefix, [Time, Type, Node, Msg]) %>
-<pre class="show">
-= <% string:to_upper(atom_to_list(Type)) %> REPORT ==== <% Time %> ===
-= <% Node %>
+<pre class="logs" onmouseover="javascript:this.className='<% atom_to_list(Type) %>';" onmouseout="javascript:this.className='logs';">
+= <span class="<% atom_to_list(Type) %>"><% string:to_upper(atom_to_list(Type)) %> REPORT</span> ==== <% Time %> ==== <span><% Node %></span> ====
 <% lists:flatten(io_lib:format("~p", [Msg])) %>
 </pre>

@@ -176,9 +176,9 @@ parse_terms(<<A:1/binary, Rest/binary>>, TermAcc, Header, Opts, Acc, Max) ->
 	parse_terms(Rest, <<TermAcc/binary, A/binary>>, Header, Opts, Acc, Max).
 	
 filter({log_entry, Time, Type, Node, Msg}, Opts) ->
-	Type0 = proplists:get_value(type, Opts, all),
-	Node0 = proplists:get_value(node, Opts),
-	Grep0 = 
+	Types = proplists:get_all_values(type, Opts),
+	Nodes = proplists:get_all_values(node, Opts),
+	Grep  = 
 		case proplists:get_value(grep, Opts) of
 			undefined -> undefined;
 			Val ->
@@ -189,36 +189,40 @@ filter({log_entry, Time, Type, Node, Msg}, Opts) ->
 		end,
 	
 	Type_Fun = 
-		fun(Type) ->
-			case Type0 of
-				all -> true;
-				Type when is_atom(Type) -> true;
-				Types when is_list(Types) ->
+		fun(TypeIn) ->
+			case Types of
+				[] -> true;
+				[Types1] when is_list(Types1) ->
+					case lists:member(all, Types1) of
+						true -> true;
+						false ->
+							lists:member(TypeIn, Types1)
+					end;
+				_ ->
 					case lists:member(all, Types) of
 						true -> true;
-						false -> lists:member(Type, Types)
-					end;
-				_ -> false
+						false ->
+							lists:member(TypeIn, Types)
+					end
 			end
 		end,
 		
 	Node_Fun =
-		fun(Node) ->
-			case Node0 of
-				undefined -> true;
-				Node -> true;
-				Nodes when is_list(Nodes) -> lists:member(Node, Nodes);
-				_ -> false
+		fun(NodeIn) ->
+			case Nodes of
+				[] -> true;
+				_ ->
+					lists:member(NodeIn, Nodes)
 			end
 		end,
 		
 	Grep_Fun =
-		fun(Grep) ->
-			case Grep0 of
+		fun(GrepIn) ->
+			case Grep of
 				undefined -> true;
 				_ ->
-					Subject = lists:flatten(io_lib:format("~p", [Grep])),
-					case re:run(Subject,Grep0) of
+					Subject = lists:flatten(io_lib:format("~p", [GrepIn])),
+					case re:run(Subject,Grep) of
 						{match, _} -> true;
 						nomatch -> false
 					end

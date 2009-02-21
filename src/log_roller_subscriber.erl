@@ -51,8 +51,7 @@ init(_) ->
 		{name, ?LOG_NAME},
 		{file, LogFile},
 		{type, wrap},
-		%{size, {10485760, 10}}
-		{size, {1048576, 10}}
+		{size, {10485760, 10}}
 	],
 	case disk_log:open(Args) of
 		{ok, Log} ->

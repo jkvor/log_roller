@@ -1,5 +1,4 @@
-
-LICENSE
+== LICENSE ==
 
 Copyright (c) 2009 Jacob Vorreuter <jacob.vorreuter@gmail.com>
 
@@ -23,3 +22,69 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
+
+== ABOUT ==
+Log_roller is based on a publisher/subscriber model. It integrates
+seamlessly with existing systems without the need to change code.
+Nodes designated as publishers broadcast log messages sent to the
+error_logger to nodes designated as subscribers.  The subscriber
+writes the log message to a rotating disk log similar to the SASL
+error_logger_mf_maxbytes and error_logger_mf_maxfiles functionality.
+The subscriber also contains a log browser and a pre-configured 
+webtool interface for monitoring logging in a browser.
+
+== Installation ==
+Either clone the repository github.com/JacobVorreuter/log_roller
+or download the tarball from jacobvorreuter.github.com/log_roller
+and run "sudo make install"
+
+== Integration ==
+To enable a node as a publisher, start the log_roller application
+on that node. This can be done either in the app file of your
+application:
+
+{application, my_app, [
+    {description, "my_app"},
+    {vsn, "0.0.1"},
+    {modules, []},
+    {registered, []},
+    {mod, {my_app, []}},
+    {applications, [kernel, stdlib, log_roller]}
+]}.
+
+-or-
+
+you can add a -boot argument to the erl shell command:
+
+erl -name myapp -boot log_roller
+
+-or-
+
+you can just call application:start:
+
+ok = application:start(log_roller)
+
+Once the log_roller application is started on a publisher node
+it will attempt to ping each node that is visible to it, looking
+for log_roller subscriber nodes.  Subscriber nodes that receive
+this ping will subscribe to the publisher node that pinged them.
+
+To start a subscriber node, you must either use the log_roller boot
+script or set the -log_roller_type "subscriber" command line argument
+to erl.
+
+During the install of log_roller, a boot script named "log_roller" is
+placed in /etc/init.d. Its usage is as follows:
+
+sudo /etc/init.d/log_roller console # start log_roller attached
+sudo /etc/init.d/log_roller start # start in detached mode
+
+
+
+== CONFIGURATION ==
+There is a config file, "log_roller.config" located in the priv 
+directory.  This will be installed to the priv directory in the
+log_roller lib directory inside your otp root directory. For
+instance: /usr/lib/erlang/lib/log_roller-0.1/priv/log_roller.config.
+This contains the path to the log directory as well as max file size
+and number of rotating log files.

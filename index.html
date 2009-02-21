@@ -10,7 +10,7 @@
 	<style type="text/css">
 		body {
   		margin-top: 1.0em;
-  		background-color: #7cd7e6;
+  		background-color: #EDEEFE;
 		  font-family: "helvetica"; 
   		color: #000000;
     }
@@ -34,26 +34,44 @@
 </head>
 
 <body>
-  <a href="http://github.com/JacobVorreuter/log_roller"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
-  
-  <div id="container">
+<a href="http://github.com/JacobVorreuter/log_roller"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
 
-    <div class="download">
-      <a href="http://github.com/JacobVorreuter/log_roller/zipball/master">
-        <img border="0" width="90" src="http://github.com/images/modules/download/zip.png"></a>
-      <a href="http://github.com/JacobVorreuter/log_roller/tarball/master">
-        <img border="0" width="90" src="http://github.com/images/modules/download/tar.png"></a>
-    </div>
-      
-    <h1><a href="http://github.com/JacobVorreuter/log_roller">log_roller</a> 
-      <span class="small">by <a href="http://github.com/JacobVorreuter">JacobVorreuter</a></small></h1>
+<div id="container">
 
-    <div class="description">
-      client/server distributed erlang logging bundled with webtool interface
-    </div>
+<div class="download">
+	<a href="http://github.com/JacobVorreuter/log_roller/zipball/master">
+		<img border="0" width="90" src="http://github.com/images/modules/download/zip.png">
+	</a>
+	<a href="http://github.com/JacobVorreuter/log_roller/tarball/master">
+		<img border="0" width="90" src="http://github.com/images/modules/download/tar.png">
+	</a>
+</div>
 
-    <h2>Dependencies</h2>
-<p>erlang otp</p>
+<h1>
+	<a href="http://github.com/JacobVorreuter/log_roller">log_roller</a> 
+	<span class="small">by <a href="http://github.com/JacobVorreuter">JacobVorreuter</a></small>
+</h1>
+
+<div class="description">
+	A pub/sub modeled, distributed Erlang logging system bundled with a report browser and webtool interface
+</div>
+
+<h2>About</h2>
+<p>log_roller is based on a publisher/subscriber model. It integrates
+seamlessly with existing systems without the need to change code.
+Nodes designated as publishers broadcast log messages sent to the
+error_logger to nodes designated as subscribers.  The subscriber
+writes the log message to a rotating disk log similar to the SASL
+error_logger_mf_maxbytes and error_logger_mf_maxfiles functionality.
+The subscriber also contains a log browser and a pre-configured 
+webtool interface for monitoring logging in a browser.</p>
+
+<p>Publishers and subscribers perform auto-discovery upon booting.
+During startup, nodes of either type (publisher or subscriber)
+will attempt to connect. Make sure to have matching ~/.erlang.cookie 
+files hosted on the servers running log_roller. The nodes will 
+not be able to see each other otherwise.</p>
+
 <h2>Install</h2>
 <p>sudo make install</p>
 <h2>License</h2>

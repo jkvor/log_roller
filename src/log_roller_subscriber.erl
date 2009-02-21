@@ -45,7 +45,19 @@ init(_) ->
 	LogFile =
 		case application:get_env(log_roller, log_dir) of
 			undefined -> atom_to_list(?LOG_NAME);
-			{ok, Dir} -> Dir ++ "/" ++ atom_to_list(?LOG_NAME)
+			{ok, Dir} -> 
+				case file:list_dir(Dir) of
+					{ok, _} -> 
+						Dir ++ "/" ++ atom_to_list(?LOG_NAME);
+					{error, enoent} ->
+						case file:make_dir(Dir) of
+							ok -> 
+								Dir ++ "/" ++ atom_to_list(?LOG_NAME);
+							DirErr ->
+								io:format("failed to create directory ~p: ~p~n", [Dir, DirErr]),
+								atom_to_list(?LOG_NAME)
+						end
+				end
 		end,
 	Maxbytes = 
 		case application:get_env(log_roller, maxbytes) of
@@ -68,9 +80,12 @@ init(_) ->
 			{ok, #state{log=Log, args=Args}};
 		{repaired, Log, {recovered, _Rec}, {badbytes, _Bad}} ->
 			{ok, #state{log=Log, args=Args}};
+		{error,{file_error,_,eacces}} ->
+			io:format("insufficient permission level to open ~s~n", [LogFile]),
+			exit(eacces);
 		Err ->
 			io:format("init error: ~p~n", [Err]),
-			{error, Err}
+			exit(Err)
 	end.
 
 handle_call({subscribe_to, Node}, _From, State) ->

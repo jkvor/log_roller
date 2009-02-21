@@ -32,7 +32,6 @@
 start(_StartType, _StartArgs) -> 
 	%% read log_roller_type (subscriber/publisher) from command line args
 	%%	ex: erl -log_roller_type subscriber -boot log_roller
-	io:format("init arg: ~p~n", [init:get_argument(log_roller_type)]),
 	case init:get_argument(log_roller_type) of 
 		{ok,[["subscriber"]]} -> 
 			supervisor:start_link({local, ?MODULE}, ?MODULE, []);

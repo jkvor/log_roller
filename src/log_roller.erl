@@ -69,7 +69,7 @@ start_phase(webtool, _, _) ->
 			ok;
 		_ -> 
 			ok
-	end;
+	end.
 		
 start_webtool() -> 
 	Port = application:get_env(log_roller, webtool_port, 8888),

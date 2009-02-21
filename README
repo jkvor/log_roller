@@ -79,7 +79,17 @@ placed in /etc/init.d. Its usage is as follows:
 sudo /etc/init.d/log_roller console # start log_roller attached
 sudo /etc/init.d/log_roller start # start in detached mode
 
+This will start a log_roller subscriber node and boot webtool.
 
+It is also possible to specify "-log_roller_type subscriber" and
+also "-webtool start" in the 
+shell. For example:
+
+erl -name lr_subscriber -log_roller_type subscriber -webtool start
+
+This will tell the log_roller application to start a subscriber
+node as well as webtool when it starts.  It is also possible to 
+include -boot log_roller in the shell.
 
 == CONFIGURATION ==
 There is a config file, "log_roller.config" located in the priv 
@@ -87,4 +97,5 @@ directory.  This will be installed to the priv directory in the
 log_roller lib directory inside your otp root directory. For
 instance: /usr/lib/erlang/lib/log_roller-0.1/priv/log_roller.config.
 This contains the path to the log directory as well as max file size
-and number of rotating log files.
+and number of rotating log files.  It also contains arguments for
+starting webtool.

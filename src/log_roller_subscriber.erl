@@ -47,11 +47,13 @@ init(_) ->
 			undefined -> atom_to_list(?LOG_NAME);
 			{ok, Dir} -> Dir ++ "/" ++ atom_to_list(?LOG_NAME)
 		end,
+	Maxbytes = application:get_env(log_roller, maxbytes, 10485760),
+	Maxfiles = application:get_env(log_roller, maxfiles, 10),
 	Args = [
 		{name, ?LOG_NAME},
 		{file, LogFile},
 		{type, wrap},
-		{size, {10485760, 10}}
+		{size, {Maxbytes, Maxfiles}}
 	],
 	case disk_log:open(Args) of
 		{ok, Log} ->

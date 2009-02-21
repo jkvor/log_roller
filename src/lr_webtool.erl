@@ -25,7 +25,6 @@
 -export([config_data/0]).
 -export([index/2, logs/2]).
 
--define(WEBTOOL_ARGS, [standard_path, [{port,4057},{bind_address,{0,0,0,0}},{server_name,"localhost"}]]).
 -define(TOOL_BASE_URL, "/log_roller/lr_webtool").
 
 config_data() ->

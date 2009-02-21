@@ -51,16 +51,32 @@ init(_) ->
 	]}}.
 
 start_phase(world, _, _) ->
-	(catch net_adm:world()),
+	net_adm:world(),
+	ok;
+
+start_phase(type_action, _, _) ->
 	case init:get_argument(log_roller_type) of 
 		{ok,[["subscriber"]]} ->
 			[log_roller_subscriber:subscribe_to(Node) || Node <- nodes()];
 		_ -> 
 			[log_roller_h:register_subscriber(Node) || Node <- nodes()]
-	end,
-	ok.
+	end, ok;
 	
-start_webtool() -> start_webtool(8888, {0,0,0,0}, "localhost").
+start_phase(webtool, _, _) ->
+	case init:get_argument(webtool) of 
+		{ok,[["start"]]} ->
+			start_webtool(),
+			ok;
+		_ -> 
+			ok
+	end;
+		
+start_webtool() -> 
+	Port = application:get_env(log_roller, webtool_port, 8888),
+	BindAddr = application:get_env(log_roller, webtool_bindaddr, {0,0,0,0}),
+	Server = application:get_env(log_roller, webtool_server, "localhost"),
+	start_webtool(Port, BindAddr, Server).
+	
 start_webtool(Port, BindAddr, ServerName) ->
 	webtool:start(standard_path, [{port,Port},{bind_address,BindAddr},{server_name,ServerName}]),
 	webtool:start_tools([],"app=log_roller"),

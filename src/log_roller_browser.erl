@@ -160,7 +160,7 @@ parse_terms(<<Header:?HEADER_SIZE/binary, Rest/binary>>, TermAcc, Header, Opts, 
 	BinTerm = reverse(<<TermAcc/binary, Header/binary>>),
 	%io:format("bin term: ~p~n", [BinTerm]),
 	case (catch binary_to_term(BinTerm)) of
-		Term when is_tuple(Term) ->
+		Term when is_record(Term, log_entry) ->
 			case filter(Term, Opts) of
 				false ->
 					parse_terms(Rest, <<>>, Header, Opts, Acc, Max);

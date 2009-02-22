@@ -1,0 +1,4 @@
+{application,log_roller}.
+{packages,[]}.
+{modules,[erltl,log_roller,log_roller_browser,log_roller_h,
+          log_roller_subscriber,lr_webtool,rb_raw]}.

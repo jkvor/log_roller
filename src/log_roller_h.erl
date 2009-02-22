@@ -20,6 +20,12 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
+%%
+%% @doc An event handler that broadcasts log messages to subscribers.
+%% log_roller_h is a gen_event that is registered with the error_logger
+%% and receives a copy of any progress, info and error reports.  A list
+%% of subscriber nodes is maintained in the gen_event state and all
+%% log messages are broadcast to that list of nodes.
 -module(log_roller_h).
 -author('jacob.vorreuter@gmail.com').
 -behaviour(gen_event).
@@ -52,8 +58,8 @@ register_subscriber(Node) ->
 %% Func: init/1
 %% Returns: {ok, State}          |
 %%          Other
+%% @hidden
 %%----------------------------------------------------------------------
-
 init(_) ->	
 	{ok, #state{listening_pids=[]}}.
 
@@ -61,7 +67,8 @@ init(_) ->
 %% Func: handle_event/2
 %% Returns: {ok, State}                                |
 %%          {swap_handler, Args1, State1, Mod2, Args2} |
-%%          remove_handler                              
+%%          remove_handler       
+%% @hidden                       
 %%----------------------------------------------------------------------
 handle_event({error, _Gleader, {Pid, Format, Data}}, State) ->
 	{ok, State1} = commit(State, #log_entry{type=error, node=atom_to_list(node(Pid)), time=erlang:now(), message=msg(Format, Data)}),
@@ -106,7 +113,8 @@ handle_event(_, State) ->
 %% Func: handle_call/2
 %% Returns: {ok, Reply, State}                                |
 %%          {swap_handler, Reply, Args1, State1, Mod2, Args2} |
-%%          {remove_handler, Reply}                            
+%%          {remove_handler, Reply}         
+%% @hidden                   
 %%----------------------------------------------------------------------
 handle_call({subscribe, Pid0}, State) ->
 	Pid = pid_to_list(Pid0),
@@ -129,6 +137,7 @@ handle_call(_Request, State) ->
 %%----------------------------------------------------------------------
 %% Func: handle_info/2
 %% Returns: {ok, State}
+%% @hidden
 %%----------------------------------------------------------------------
 handle_info(_Info, State) ->
     {ok, State}.
@@ -137,10 +146,12 @@ handle_info(_Info, State) ->
 %% Func: terminate/2
 %% Purpose: Shutdown the server
 %% Returns: any
+%% @hidden
 %%----------------------------------------------------------------------
 terminate(_Reason, _State) ->
     ok.
 
+%% @hidden
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 

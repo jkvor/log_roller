@@ -20,6 +20,8 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
+%%
+%% @doc A webtool module that provides a user interface for log browsing
 -module(lr_webtool).
 
 -export([config_data/0]).
@@ -27,14 +29,20 @@
 
 -define(TOOL_BASE_URL, "/log_roller/lr_webtool").
 
+%% @spec config_data() -> {log_roller, Args::list()}
+%% @doc fetch config data for loading module in webtool
 config_data() ->
 	{log_roller, [{web_data,{"log_roller", ?TOOL_BASE_URL ++ "/index"}}, 
 			 {alias,{erl_alias,"/log_roller",[lr_webtool]}}
 			]}.
 
+%% @spec index(Env::list(), Input::list()) -> binary()
+%% @doc the index function displays the default log view
 index(_Env,_Input) ->
 	display([{"max", "20"}]).
 
+%% @spec logs(Env::list(), Input::list()) -> binary()
+%% @doc query the log browser with custom args
 logs(_Env, Input) ->
 	display(httpd:parse_query(Input)).
 	

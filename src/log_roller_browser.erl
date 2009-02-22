@@ -20,6 +20,11 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
+%%
+%% @doc Browse log files collected by a log_roller subscriber node.
+%% log_roller_browser is a gen_server that is started by the log_roller 
+%% application when the "-log_roller_type subscriber" argument is given 
+%% in the shell.
 -module(log_roller_browser).
 -author('jacob.vorreuter@gmail.com').
 -behaviour(gen_server).
@@ -41,15 +46,23 @@
 %%====================================================================
 %% API
 %%====================================================================
-%%--------------------------------------------------------------------
-%% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
-%% Description: Starts the server
-%%--------------------------------------------------------------------
+
+%% @spec start_link() -> {ok,Pid} | ignore | {error,Error}
+%% @doc starts the server
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
+%% @spec fetch() -> Results
+%% @equiv fetch([])
 fetch() -> fetch([]).
 	
+%% @spec fetch(Opts) -> Result
+%% 		 Opts = [{max, integer()} |
+%%				 {type, atom()} | {type, list(atom())} |
+%%				 {node, string()} | {node, list(string())} |
+%%				 {grep, string()}]
+%%		 Result = list(list(Time::string(), Type::atom(), Node::string(), Message::string()))
+%% @doc fetch a list of log entries
 fetch(Opts) when is_list(Opts) ->
 	gen_server:call(?MODULE, {fetch, Opts}).
 
@@ -63,18 +76,20 @@ fetch(Opts) when is_list(Opts) ->
 %%                         ignore               |
 %%                         {stop, Reason}
 %% Description: Initiates the server
+%% @hidden
 %%--------------------------------------------------------------------
 init(_) ->
 	{ok, #state{header=header_binary(), handles=dict:new()}}.
 
 %%--------------------------------------------------------------------
-%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
+%% Function: handle_call(Request, From, State) -> {reply, Reply, State} |
 %%                                      {reply, Reply, State, Timeout} |
 %%                                      {noreply, State} |
 %%                                      {noreply, State, Timeout} |
 %%                                      {stop, Reason, Reply, State} |
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
+%% @hidden
 %%--------------------------------------------------------------------
 handle_call({fetch, Opts}, _From, State) ->
 	Max = proplists:get_value(max, Opts, 100),
@@ -94,6 +109,7 @@ handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 %%                                      {noreply, State, Timeout} |
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
+%% @hidden
 %%--------------------------------------------------------------------
 handle_cast(_Message, State) -> {noreply, State}.
 
@@ -102,6 +118,7 @@ handle_cast(_Message, State) -> {noreply, State}.
 %%                                       {noreply, State, Timeout} |
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
+%% @hidden
 %%--------------------------------------------------------------------
 handle_info(_Info, State) -> {noreply, State}.
 
@@ -111,12 +128,14 @@ handle_info(_Info, State) -> {noreply, State}.
 %% terminate. It should be the opposite of Module:init/1 and do any necessary
 %% cleaning up. When it returns, the gen_server terminates with Reason.
 %% The return value is ignored.
+%% @hidden
 %%--------------------------------------------------------------------
 terminate(_Reason, _State) -> ok.
 
 %%--------------------------------------------------------------------
 %% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
 %% Description: Convert process state when code is changed
+%% @hidden
 %%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 

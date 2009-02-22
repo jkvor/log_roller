@@ -12,7 +12,10 @@ templates: all
 	erl -pa ebin -eval 'log_roller:compile_templates()' -s init stop -noshell
 
 clean:
-	rm -rf ebin/*.beam *.boot *.rel *.script Mnesia* erl_crash.dump *.tgz *.1 *.idx *.siz
+	rm -rf ebin/*.beam doc/*.html doc/*.png doc/*-info doc/*.css *.boot *.rel *.script Mnesia* erl_crash.dump *.tgz *.1 *.idx *.siz
+	
+docs: all
+	erl -eval 'edoc:application(log_roller, ".", [])' -s init stop -noinput
 
 install: rel
 	mkdir -p ${LIBDIR}/log_roller-$(VERSION)/{ebin,include,priv}

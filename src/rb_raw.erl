@@ -38,18 +38,29 @@
 %% Portions created by Ericsson are Copyright 1999, Ericsson Utvecklings
 %% AB. All Rights Reserved.''
 %%
+%% @doc Read logs written using the SASL error_logger_mf_maxbytes and 
+%% error_logger_mf_maxfiles functionality. Unlinke the rb module, rb_raw
+%% is not a gen_server, has no state, and doesn't need to be started
+%% before querying the log data.
 -module(rb_raw).
 
 %% External exports
 -export([list/0, list/1]).
 -export([show/0, show/1]).
 
+%% @spec show() -> Result
+%% @equiv show([])
 show() -> show([]).
 
+%% @spec show(Opts) -> Result
+%%		 Opts = [{max, integer()}|{type, atom()}]
+%%		 Result = {No::integer(), Type::atom(), Descr::string(), Date::datetime(), Fname::string(), FilePosition::integer()}
 show(Opts) when is_list(Opts) ->
 	Logs = list(Opts),
 	[show(Log) || Log <- Logs];
 	
+%% @spec show(LogDetails) -> Result
+%%		 LogDetails = {No::integer(), Type::atom(), Descr::string(), Date::datetime(), Fname::string(), FilePosition::integer()}
 show({_No, _Type, _Descr, _Date, Fname, FilePosition}) ->
 	Dir = get_report_dir(),
 	FileName = lists:concat([Dir, "/", Fname]),
@@ -60,8 +71,12 @@ show({_No, _Type, _Descr, _Date, Fname, FilePosition}) ->
 		    io:format("rb: can't open file ~p~n", [FileName])
     end.
 
+%% @equiv list([])
 list() -> list([]).
 
+%% @spec list(Opts) -> Result
+%%		 Opts = [{max, integer()}|{type, atom()}]
+%%		 Result = [{No::integer(), Type::atom(), Descr::string(), Date::datetime(), Fname::string(), FilePosition::integer()}]
 list(Opts) when is_list(Opts) ->
 	Max = proplists:get_value(max, Opts, 100),
 	Type = proplists:get_value(type, Opts, all),

@@ -20,6 +20,10 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
+%%
+%% @doc The subscriber receives log messages broadcast from publisher nodes.
+%% log_roller_subscriber is a gen_server that maintains a file handle
+%% for the disk_log that it writes to.
 -module(log_roller_subscriber).
 -author('jacob.vorreuter@gmail.com').
 -behaviour(gen_server).
@@ -38,10 +42,9 @@
 %%====================================================================
 %% API
 %%====================================================================
-%%--------------------------------------------------------------------
-%% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
-%% Description: Starts the server
-%%--------------------------------------------------------------------
+
+%% @spec start_link() -> {ok,Pid} | ignore | {error,Error}
+%% @doc start the server
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
@@ -87,6 +90,7 @@ current_location() ->
 %%                         ignore               |
 %%                         {stop, Reason}
 %% Description: Initiates the server
+%% @hidden
 %%--------------------------------------------------------------------
 init(_) ->
 	LogFile =
@@ -143,6 +147,7 @@ init(_) ->
 %%                                      {stop, Reason, Reply, State} |
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
+%% @hidden
 %%--------------------------------------------------------------------
 handle_call({subscribe_to, Node}, _From, State) ->
 	Res = gen_event:call({error_logger, Node}, log_roller_h, {subscribe, self()}),
@@ -166,6 +171,7 @@ handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 %%                                      {noreply, State, Timeout} |
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
+%% @hidden
 %%--------------------------------------------------------------------
 handle_cast(_Message, State) -> {noreply, State}.
 
@@ -174,6 +180,7 @@ handle_cast(_Message, State) -> {noreply, State}.
 %%                                       {noreply, State, Timeout} |
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
+%% @hidden
 %%--------------------------------------------------------------------
 handle_info({log_roller, _Sender, LogEntry}, #state{log=Log}=State) ->
 	io:format("received a log: ~p~n", [term_to_binary(LogEntry)]),
@@ -188,6 +195,7 @@ handle_info(_Info, State) -> {noreply, State}.
 %% terminate. It should be the opposite of Module:init/1 and do any necessary
 %% cleaning up. When it returns, the gen_server terminates with Reason.
 %% The return value is ignored.
+%% @hidden
 %%--------------------------------------------------------------------
 terminate(_Reason, #state{log=Log}) -> 
 	io:format("closing log~n"),
@@ -196,6 +204,7 @@ terminate(_Reason, #state{log=Log}) ->
 %%--------------------------------------------------------------------
 %% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
 %% Description: Convert process state when code is changed
+%% @hidden
 %%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 

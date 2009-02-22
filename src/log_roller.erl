@@ -31,6 +31,7 @@
 %%% Application API
 %%%
 
+%% @doc start the application
 start(_StartType, _StartArgs) -> 
 	%% read log_roller_type (subscriber/publisher) from command line args
 	%%	ex: erl -log_roller_type subscriber -boot log_roller
@@ -42,7 +43,7 @@ start(_StartType, _StartArgs) ->
 			{ok, self()}
 	end.
 
-%% All the processes were killed when this function is called
+%% @doc stop the application
 stop(_) -> 
 	ok.
 	
@@ -50,16 +51,19 @@ stop(_) ->
 %%% Internal functions
 %%%
 
+%% @hidden
 init(_) ->
 	{ok, {{one_for_one, 10, 10}, [
 	    {log_roller_subscriber, {log_roller_subscriber, start_link, []}, permanent, 5000, worker, [log_roller_subscriber]},
 		{log_roller_browser, {log_roller_browser, start_link, []}, permanent, 5000, worker, [log_roller_browser]}
 	]}}.
 
+%% @hidden
 start_phase(world, _, _) ->
 	net_adm:world(),
 	ok;
 
+%% @hidden
 start_phase(type_action, _, _) ->
 	case init:get_argument(log_roller_type) of 
 		{ok,[["subscriber"]]} ->
@@ -68,6 +72,7 @@ start_phase(type_action, _, _) ->
 			[log_roller_h:register_subscriber(Node) || Node <- nodes()]
 	end, ok;
 	
+%% @hidden
 start_phase(webtool, _, _) ->
 	case init:get_argument(webtool) of 
 		{ok,[["start"]]} ->
@@ -76,7 +81,8 @@ start_phase(webtool, _, _) ->
 		_ -> 
 			ok
 	end.
-		
+
+%% @hidden		
 start_webtool() -> 
 	Port = 
 		case application:get_env(log_roller, webtool_port) of
@@ -94,12 +100,14 @@ start_webtool() ->
 			{ok, Val3} -> Val3
 		end,
 	start_webtool(Port, BindAddr, Server).
-	
+
+%% @hidden	
 start_webtool(Port, BindAddr, ServerName) ->
 	webtool:start(standard_path, [{port,Port},{bind_address,BindAddr},{server_name,ServerName}]),
 	webtool:start_tools([],"app=log_roller"),
 	ok.
 
+%% @hidden
 build_rel() ->
     {ok, FD} = file:open("log_roller.rel", [write]),
     RootDir = code:root_dir(),
@@ -126,6 +134,7 @@ build_rel() ->
     systools:make_script("log_roller", [local]),
     ok.
 
+%% @hidden
 compile_templates() ->
 	case file:list_dir("templates") of
 		{ok, Filenames} ->
@@ -138,8 +147,16 @@ compile_templates() ->
 			exit(failure)
 	end.
 
+%% @doc purge and load all modules in app
 reload() ->
-    Modules = [log_roller, log_roller_h],
+    Modules = [
+				log_roller, 
+				log_roller_browser,
+				log_roller_h,
+				log_roller_subscriber,
+				lr_webtool,
+				rb_raw
+			  ],
     lists:foreach(
         fun(Module) ->
             case code:is_loaded(Module) of

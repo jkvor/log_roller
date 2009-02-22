@@ -20,10 +20,4 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
-
--define(MIN_BYTES, 104856).
--define(NUM_TABLES, 10).
-
--record(log_roller_counter, {key, value}).
--record(log_roller_config, {key, value}).
 -record(log_entry, {time, type, node, message}).

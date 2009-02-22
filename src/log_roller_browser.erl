@@ -24,35 +24,58 @@
 -author('jacob.vorreuter@gmail.com').
 -behaviour(gen_server).
 
--export([start/0, init/1, handle_call/3, handle_cast/2, handle_info/2]).
+%% gen_server callbacks
+-export([start_link/0, init/1, handle_call/3, handle_cast/2, handle_info/2]).
 -export([terminate/2, code_change/3]).
 
+%% API exports
 -export([fetch/0, fetch/1]).
 
 -include("log_roller.hrl").
 
 -record(state, {header, handles}).
+
 -define(MAX_CHUNK_SIZE, 65536).
 -define(HEADER_SIZE, 14).
-		
-%% =============================================================================
-%% API FUNCTIONS
-%% =============================================================================
+
+%%====================================================================
+%% API
+%%====================================================================
+%%--------------------------------------------------------------------
+%% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
+%% Description: Starts the server
+%%--------------------------------------------------------------------
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
 fetch() -> fetch([]).
 	
 fetch(Opts) when is_list(Opts) ->
 	gen_server:call(?MODULE, {fetch, Opts}).
 
-%% =============================================================================
-%% GEN_SERVER CALLBACKS
-%% =============================================================================
+%%====================================================================
+%% gen_server callbacks
+%%====================================================================
 
-start() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
+%%--------------------------------------------------------------------
+%% Function: init(Args) -> {ok, State} |
+%%                         {ok, State, Timeout} |
+%%                         ignore               |
+%%                         {stop, Reason}
+%% Description: Initiates the server
+%%--------------------------------------------------------------------
 init(_) ->
 	{ok, #state{header=header_binary(), handles=dict:new()}}.
 
+%%--------------------------------------------------------------------
+%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
+%%                                      {reply, Reply, State, Timeout} |
+%%                                      {noreply, State} |
+%%                                      {noreply, State, Timeout} |
+%%                                      {stop, Reason, Reply, State} |
+%%                                      {stop, Reason, State}
+%% Description: Handling call messages
+%%--------------------------------------------------------------------
 handle_call({fetch, Opts}, _From, State) ->
 	Max = proplists:get_value(max, Opts, 100),
 	
@@ -66,17 +89,40 @@ handle_call({fetch, Opts}, _From, State) ->
 		
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 
+%%--------------------------------------------------------------------
+%% Function: handle_cast(Msg, State) -> {noreply, State} |
+%%                                      {noreply, State, Timeout} |
+%%                                      {stop, Reason, State}
+%% Description: Handling cast messages
+%%--------------------------------------------------------------------
 handle_cast(_Message, State) -> {noreply, State}.
 
+%%--------------------------------------------------------------------
+%% Function: handle_info(Info, State) -> {noreply, State} |
+%%                                       {noreply, State, Timeout} |
+%%                                       {stop, Reason, State}
+%% Description: Handling all non call/cast messages
+%%--------------------------------------------------------------------
 handle_info(_Info, State) -> {noreply, State}.
 
+%%--------------------------------------------------------------------
+%% Function: terminate(Reason, State) -> void()
+%% Description: This function is called by a gen_server when it is about to
+%% terminate. It should be the opposite of Module:init/1 and do any necessary
+%% cleaning up. When it returns, the gen_server terminates with Reason.
+%% The return value is ignored.
+%%--------------------------------------------------------------------
 terminate(_Reason, _State) -> ok.
 
+%%--------------------------------------------------------------------
+%% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
+%% Description: Convert process state when code is changed
+%%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
-	
-%% =============================================================================
-%% INTERNAL FUNCTIONS
-%% =============================================================================
+
+%%--------------------------------------------------------------------
+%%% Internal functions
+%%--------------------------------------------------------------------
 
 chunk(State, _, _, Acc, Max) when length(Acc) >= Max -> {ok, State, Acc};
 

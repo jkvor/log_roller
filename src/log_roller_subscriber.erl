@@ -24,23 +24,70 @@
 -author('jacob.vorreuter@gmail.com').
 -behaviour(gen_server).
 
--export([start/0, init/1, handle_call/3, handle_cast/2, handle_info/2]).
--export([terminate/2, code_change/3]).
+%% gen_server callbacks
+-export([start_link/0, init/1, handle_call/3, handle_cast/2, 
+		 handle_info/2, terminate/2, code_change/3]).
 
+%% API exports
 -export([subscribe_to/1, ping/0, current_location/0]).
 
--include("log_roller.hrl").
-
 -record(state, {log, args}).
+
 -define(LOG_NAME, log_roller_data).
 
-%% =============================================================================
-%% GEN_SERVER CALLBACKS
-%% =============================================================================
-
-start() ->
+%%====================================================================
+%% API
+%%====================================================================
+%%--------------------------------------------------------------------
+%% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
+%% Description: Starts the server
+%%--------------------------------------------------------------------
+start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
+%% @spec subscribe_to(Node) -> ok
+%%		 Node = list() | node()
+%% @doc send a message to the specified node, registering the gen_server process as a subscriber
+subscribe_to(Node) when is_list(Node) -> 
+	subscribe_to(list_to_atom(Node));
+
+subscribe_to(Node) when is_atom(Node) ->
+	gen_server:call(?MODULE, {subscribe_to, Node}).
+
+%% @spec ping() -> {ok, Pid}
+%%		 Pid = pid()
+%% @doc respond to ping requests sent from publisher nodes with the gen_server process id
+ping() ->
+	gen_server:call(?MODULE, ping).
+
+%% @spec current_location() -> Result
+%%		 Result = {FileStub, Index, Pos, SizeLimit, MaxIndex}
+%%		 FileStub = list()
+%%		 Index = integer()
+%%		 Pos = integer()
+%%		 SizeLimit = integer()
+%%		 MaxIndex = integer()
+%% @doc return the current location details of the disk_log
+%% FileStub is the base file name which Index is appended to
+%% when creating the logs. ie: log_roller_data.1
+%% Pos is the position in the current log file after the last
+%% insert.  SizeLimit and MaxIndex are the config values that
+%% dictate how large log files can become and how many files
+%% to distribute the logs amongst.
+current_location() ->
+	gen_server:call(?MODULE, current_location).
+	
+%%====================================================================
+%% gen_server callbacks
+%%====================================================================
+
+%%--------------------------------------------------------------------
+%% Function: init(Args) -> {ok, State} |
+%%                         {ok, State, Timeout} |
+%%                         ignore               |
+%%                         {stop, Reason}
+%% Description: Initiates the server
+%%--------------------------------------------------------------------
 init(_) ->
 	LogFile =
 		case application:get_env(log_roller, log_dir) of
@@ -88,6 +135,15 @@ init(_) ->
 			exit(Err)
 	end.
 
+%%--------------------------------------------------------------------
+%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
+%%                                      {reply, Reply, State, Timeout} |
+%%                                      {noreply, State} |
+%%                                      {noreply, State, Timeout} |
+%%                                      {stop, Reason, Reply, State} |
+%%                                      {stop, Reason, State}
+%% Description: Handling call messages
+%%--------------------------------------------------------------------
 handle_call({subscribe_to, Node}, _From, State) ->
 	Res = gen_event:call({error_logger, Node}, log_roller_h, {subscribe, self()}),
 	{reply, Res, State};
@@ -105,8 +161,20 @@ handle_call(current_location, _From, #state{log=Log, args=Args}=State) ->
 		
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 
+%%--------------------------------------------------------------------
+%% Function: handle_cast(Msg, State) -> {noreply, State} |
+%%                                      {noreply, State, Timeout} |
+%%                                      {stop, Reason, State}
+%% Description: Handling cast messages
+%%--------------------------------------------------------------------
 handle_cast(_Message, State) -> {noreply, State}.
 
+%%--------------------------------------------------------------------
+%% Function: handle_info(Info, State) -> {noreply, State} |
+%%                                       {noreply, State, Timeout} |
+%%                                       {stop, Reason, State}
+%% Description: Handling all non call/cast messages
+%%--------------------------------------------------------------------
 handle_info({log_roller, _Sender, LogEntry}, #state{log=Log}=State) ->
 	io:format("received a log: ~p~n", [term_to_binary(LogEntry)]),
 	ok = disk_log:log(Log, LogEntry),
@@ -114,22 +182,23 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log}=State) ->
 
 handle_info(_Info, State) -> {noreply, State}.
 
+%%--------------------------------------------------------------------
+%% Function: terminate(Reason, State) -> void()
+%% Description: This function is called by a gen_server when it is about to
+%% terminate. It should be the opposite of Module:init/1 and do any necessary
+%% cleaning up. When it returns, the gen_server terminates with Reason.
+%% The return value is ignored.
+%%--------------------------------------------------------------------
 terminate(_Reason, #state{log=Log}) -> 
 	io:format("closing log~n"),
 	disk_log:close(Log).
 
+%%--------------------------------------------------------------------
+%% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
+%% Description: Convert process state when code is changed
+%%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
-%% =============================================================================
-%% API FUNCTIONS
-%% =============================================================================
-subscribe_to(Node) when is_list(Node) -> subscribe_to(list_to_atom(Node));
-
-subscribe_to(Node) when is_atom(Node) ->
-	gen_server:call(?MODULE, {subscribe_to, Node}).
-
-ping() ->
-	gen_server:call(?MODULE, ping).
-	
-current_location() ->
-	gen_server:call(?MODULE, current_location).
+%%--------------------------------------------------------------------
+%%% Internal functions
+%%--------------------------------------------------------------------

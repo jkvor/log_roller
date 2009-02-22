@@ -26,9 +26,11 @@
 
 -export([start/2, stop/1, init/1, start_phase/3, start_webtool/0, start_webtool/3]).
 -export([build_rel/0, compile_templates/0, reload/0]).
-
--include("log_roller.hrl").
 	
+%%%
+%%% Application API
+%%%
+
 start(_StartType, _StartArgs) -> 
 	%% read log_roller_type (subscriber/publisher) from command line args
 	%%	ex: erl -log_roller_type subscriber -boot log_roller
@@ -40,13 +42,18 @@ start(_StartType, _StartArgs) ->
 			{ok, self()}
 	end.
 
+%% All the processes were killed when this function is called
 stop(_) -> 
 	ok.
 	
+%%%
+%%% Internal functions
+%%%
+
 init(_) ->
 	{ok, {{one_for_one, 10, 10}, [
-	    {log_roller_subscriber, {log_roller_subscriber, start, []}, permanent, 5000, worker, [log_roller_subscriber]},
-		{log_roller_browser, {log_roller_browser, start, []}, permanent, 5000, worker, [log_roller_browser]}
+	    {log_roller_subscriber, {log_roller_subscriber, start_link, []}, permanent, 5000, worker, [log_roller_subscriber]},
+		{log_roller_browser, {log_roller_browser, start_link, []}, permanent, 5000, worker, [log_roller_browser]}
 	]}}.
 
 start_phase(world, _, _) ->

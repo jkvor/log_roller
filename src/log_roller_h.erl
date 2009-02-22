@@ -33,6 +33,8 @@
 
 -record(state, {listening_pids}).
 
+%% @spec register_subscriber(Node::node()) -> ok
+%% @doc ping Node to determine if it is a subscriber and register with event handler if it is
 register_subscriber(Node) ->
 	case (catch rpc:call(Node, log_roller_subscriber, ping, [])) of
 		{ok, Pid} ->

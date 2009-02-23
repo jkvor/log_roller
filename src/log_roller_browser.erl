@@ -148,8 +148,6 @@ chunk(State, _, _, Acc, Max) when length(Acc) >= Max -> {ok, State, Acc};
 chunk(#state{header=Header, handles=Handles}=State, {FileStub, Index, Pos, SizeLimit, MaxIndex}, Opts, Acc, Max) ->
 
 	FileName = lists:flatten(io_lib:format("~s.~w", [FileStub, Index])),
-	
-	{ok, Handles1, IoDevice} = file_handle(FileName, Handles),
 
 	Bytes =
 		if 
@@ -158,19 +156,24 @@ chunk(#state{header=Header, handles=Handles}=State, {FileStub, Index, Pos, SizeL
 			true -> 
 				Pos + ?MAX_CHUNK_SIZE
 		end,
-		
-	%io:format("pos/bytes: ~p and ~p~n", [Pos, Bytes]),
-	case file:pread(IoDevice, Pos, Bytes) of
-		{ok, Chunk} -> 
-			%io:format("chunk: ~p~n", [Chunk]),
-			State1 = State#state{handles=Handles1},
-			Acc1 = parse_terms(reverse(Chunk), <<>>, Header, Opts, Acc, Max),
-			{Index1, Pos1} = rewind_location(Index, Pos, SizeLimit, MaxIndex),
-			chunk(State1, {FileStub, Index1, Pos1, SizeLimit, MaxIndex}, Opts, Acc1, Max);
-		eof ->
-			{ok, State, Acc};
-		{error, Reason} -> 
-			io:format("error reading file: ~p~n", [Reason]),
+			
+	case file_handle(FileName, Handles) of
+		{ok, Handles1, IoDevice} ->
+			%io:format("pos/bytes: ~p and ~p~n", [Pos, Bytes]),
+			case file:pread(IoDevice, Pos, Bytes) of
+				{ok, Chunk} -> 
+					%io:format("chunk: ~p~n", [Chunk]),
+					State1 = State#state{handles=Handles1},
+					Acc1 = parse_terms(reverse(Chunk), <<>>, Header, Opts, Acc, Max),
+					{Index1, Pos1} = rewind_location(Index, Pos, SizeLimit, MaxIndex),
+					chunk(State1, {FileStub, Index1, Pos1, SizeLimit, MaxIndex}, Opts, Acc1, Max);
+				eof ->
+					{ok, State, Acc};
+				{error, Reason} -> 
+					io:format("error reading file pread(~p, ~p, ~p): ~p~n", [IoDevice, Pos, Bytes, Reason]),
+					{ok, State, Acc}
+			end;
+		{error, Handles, enoent} ->
 			{ok, State, Acc}
 	end.
 		
@@ -212,8 +215,10 @@ file_handle(FileName, Handles) ->
 				{ok, IoDevice} ->
 					Handles1 = dict:store(FileName, IoDevice, Handles),
 					{ok, Handles1, IoDevice};
-				_ ->
-					{ok, Handles, error}
+				{error, enoent} ->
+					{error, Handles, enoent};
+				Err ->
+					exit(Err)
 			end
 	end.
 
@@ -232,6 +237,9 @@ parse_terms(<<Header:?HEADER_SIZE/binary, Rest/binary>>, TermAcc, Header, Opts, 
 				Term1 ->
 					parse_terms(Rest, <<>>, Header, Opts, [Term1|Acc], Max)
 			end;
+		{'EXIT',{badarg,_}} ->
+			io:format("bad argument parsing binary term: ~p~n", [BinTerm]),
+			Acc;
 		Err ->
 			io:format("failed converting to term: ~p~n", [Err]),
 			Acc

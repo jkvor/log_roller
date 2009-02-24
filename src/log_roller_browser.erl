@@ -148,7 +148,7 @@ chunk(State, _, _, Acc, Max) when length(Acc) >= Max -> {ok, State, Acc};
 chunk(#state{header=Header, handles=Handles}=State, {FileStub, Index, Pos, SizeLimit, MaxIndex}, Opts, Acc, Max) ->
 
 	FileName = lists:flatten(io_lib:format("~s.~w", [FileStub, Index])),
-
+	
 	Bytes =
 		if 
 			Pos + ?MAX_CHUNK_SIZE > SizeLimit ->

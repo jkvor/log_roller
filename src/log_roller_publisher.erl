@@ -50,5 +50,5 @@ start_phase(world, _, _) ->
 
 %% @hidden
 start_phase(discovery, _, _) ->
-	[log_roller_h:register_subscriber(Node) || Node <- nodes()],
+	[log_roller_h:register_subscriber(Node) || Node <- [node()|nodes()]],
 	ok.

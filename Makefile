@@ -37,6 +37,7 @@ package: clean
 	@rm -rf log_roller-$(VERSION)/
 		
 rel: templates
+	mkdir -p bin
 	escript priv/build_rel.escript subscriber
 	escript priv/build_rel.escript publisher
 

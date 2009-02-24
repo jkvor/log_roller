@@ -4,7 +4,10 @@
     {modules, [
         log_roller_subscriber,
 		log_roller_disk_logger,
-		log_roller_browser
+		log_roller_browser,
+		log_roller_webtool,
+		lrb,
+		rb_raw
     ]},
     {registered, []},
     {mod, {log_roller_subscriber, []}},

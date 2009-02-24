@@ -24,7 +24,7 @@
 -author('jacob.vorreuter@gmail.com').
 -behaviour(application).
 
--export([start/2, stop/1, init/1, start_phase/3, start_webtool/0]).
+-export([start/2, stop/1, init/1, start_phase/3, start_webtool/0, reload/0]).
 	
 %%%
 %%% Application API
@@ -46,17 +46,17 @@ stop(_) ->
 
 start_webtool() -> 
 	Port = 
-		case application:get_env(log_roller, webtool_port) of
+		case application:get_env(log_roller_subscriber, webtool_port) of
 			undefined -> 8888;
 			{ok, Val1} -> Val1
 		end,
 	BindAddr = 
-		case application:get_env(log_roller, webtool_bindaddr) of
+		case application:get_env(log_roller_subscriber, webtool_bindaddr) of
 			undefined -> {0,0,0,0};
 			{ok, Val2} -> Val2
 		end,
 	Server = 
-		case application:get_env(log_roller, webtool_server) of
+		case application:get_env(log_roller_subscriber, webtool_server) of
 			undefined -> "localhost";
 			{ok, Val3} -> Val3
 		end,
@@ -80,7 +80,7 @@ start_phase(world, _, _) ->
 
 %% @hidden
 start_phase(discovery, _, _) ->
-	[log_roller_disk_logger:subscribe_to(Node) || Node <- nodes()],
+	[log_roller_disk_logger:subscribe_to(Node) || Node <- [node()|nodes()]],
 	ok.
 		
 %% @hidden	
@@ -88,3 +88,18 @@ start_webtool(Port, BindAddr, ServerName) ->
 	webtool:start(standard_path, [{port,Port},{bind_address,BindAddr},{server_name,ServerName}]),
 	webtool:start_tools([],"app=log_roller"),
 	ok.
+
+reload() ->
+	{ok, Modules} = application_controller:get_key(?MODULE, modules),
+	[begin
+		case code:is_loaded(Module) of
+        	false -> ok;
+        	{file, _Path} ->
+            	code:purge(Module),
+            	code:load_file(Module)
+    	end 
+ 	 end || Module <- Modules],
+	log_roller_disk_logger:reload().
+	
+	
+	

@@ -149,7 +149,7 @@ handle_cast(_Message, State) -> {noreply, State}.
 %% @hidden
 %%--------------------------------------------------------------------
 handle_info({log_roller, _Sender, LogEntry}, #state{log=Log}=State) ->
-	io:format("received a log: ~p~n", [term_to_binary(LogEntry)]),
+	io:format("writing a log for ~p~n", [Log]),
 	ok = disk_log:log(Log, LogEntry),
 	{noreply, State};
 
@@ -179,7 +179,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%--------------------------------------------------------------------
 
 log_file() ->
-	case application:get_env(log_roller, log_dir) of
+	case application:get_env(log_roller_subscriber, log_dir) of
 		undefined -> atom_to_list(?LOG_NAME);
 		{ok, Dir} -> 
 			case file:list_dir(Dir) of
@@ -199,12 +199,12 @@ log_file() ->
 initialize_state() ->
 	LogFile = log_file(),
 	Maxbytes = 
-		case application:get_env(log_roller, maxbytes) of
+		case application:get_env(log_roller_subscriber, maxbytes) of
 			undefined -> 10485760;
 			{ok, Val1} -> Val1
 		end,
 	Maxfiles = 
-		case application:get_env(log_roller, maxfiles) of
+		case application:get_env(log_roller_subscriber, maxfiles) of
 			undefined -> 10;
 			{ok, Val2} -> Val2
 		end,

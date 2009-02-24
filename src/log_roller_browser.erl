@@ -94,7 +94,7 @@ init(_) ->
 handle_call({fetch, Opts}, _From, State) ->
 	Max = proplists:get_value(max, Opts, 100),
 	
-	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_subscriber:current_location(),
+	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
 
 	{Index1, Pos1} = rewind_location(Index, Pos, SizeLimit, MaxIndex),
 	

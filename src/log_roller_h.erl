@@ -42,7 +42,7 @@
 %% @spec register_subscriber(Node::node()) -> ok
 %% @doc ping Node to determine if it is a subscriber and register with event handler if it is
 register_subscriber(Node) ->
-	case (catch rpc:call(Node, log_roller_subscriber, ping, [])) of
+	case (catch rpc:call(Node, log_roller_disk_logger, ping, [])) of
 		{ok, Pid} ->
 			io:format("ping successful for ~p~n", [Node]),
 			gen_event:call(error_logger, log_roller_h, {subscribe, Pid});

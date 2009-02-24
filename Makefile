@@ -9,10 +9,10 @@ ERL_OBJECTS := $(ERL_SOURCES:%.erl=./%.beam)
 all: $(ERL_OBJECTS)
 
 templates: all
-	erl -pa ebin -eval 'log_roller:compile_templates()' -s init stop -noshell
+	escript priv/compile_templates.escript
 
 clean:
-	rm -rf ebin/*.beam doc/*.html doc/*.png doc/*-info doc/*.css *.boot *.rel *.script Mnesia* erl_crash.dump *.tgz *.1 *.idx *.siz
+	rm -rf ebin/*.beam doc/*.html doc/*.png doc/*-info doc/*.css bin/*.boot bin/*.rel bin/*.script Mnesia* erl_crash.dump *.tgz *.1 *.idx *.siz
 	
 docs: all
 	erl -eval 'edoc:application(log_roller, ".", [])' -s init stop -noinput
@@ -20,15 +20,16 @@ docs: all
 install: rel
 	mkdir -p ${LIBDIR}/log_roller-$(VERSION)/{ebin,include,priv}
 	for i in ebin/*.beam include/* priv/* ebin/*.app; do install $$i ${LIBDIR}/log_roller-$(VERSION)/$$i ; done
-	cp log_roller.boot $(ROOTDIR)/bin/
+	cp *.boot $(ROOTDIR)/bin/
 	mkdir -p /etc/init.d
 	mkdir -p /var/log/log_roller
-	cp log_roller /etc/init.d/
+	cp log_roller_subscriber /etc/init.d/
+	cp log_roller_publisher /etc/init.d/
 	
 uninstall:
 	rm -rf ${LIBDIR}/log_roller-*
-	rm $(ROOTDIR)/bin/log_roller.boot
-	rm /etc/init.d/log_roller
+	rm $(ROOTDIR)/bin/log_roller*.boot
+	rm /etc/init.d/log_roller*
 
 package: clean
 	@mkdir log_roller-$(VERSION)/ && cp -rf ebin include log_roller Makefile priv README src templates log_roller-$(VERSION)
@@ -36,8 +37,12 @@ package: clean
 	@rm -rf log_roller-$(VERSION)/
 		
 rel: templates
-	erl -pa ebin -noshell -run log_roller build_rel -s init stop
+	escript priv/build_rel.escript subscriber
+	escript priv/build_rel.escript publisher
 
+test: all
+	prove -v t/*.t
+	
 ./%.beam: %.erl
 	@mkdir -p ebin
 	erlc +debug_info -I include -o ebin $<

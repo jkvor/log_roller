@@ -1,2 +1,2 @@
 {version,"1.2"}.
-[{config_func, {lr_webtool,config_data,[]}}].
+[{config_func, {log_roller_webtool,config_data,[]}}].

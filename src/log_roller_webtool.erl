@@ -22,18 +22,18 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 %%
 %% @doc A webtool module that provides a user interface for log browsing
--module(lr_webtool).
+-module(log_roller_webtool).
 
 -export([config_data/0]).
 -export([index/2, logs/2]).
 
--define(TOOL_BASE_URL, "/log_roller/lr_webtool").
+-define(TOOL_BASE_URL, "/log_roller/log_roller_webtool").
 
 %% @spec config_data() -> {log_roller, Args::list()}
 %% @doc fetch config data for loading module in webtool
 config_data() ->
 	{log_roller, [{web_data,{"log_roller", ?TOOL_BASE_URL ++ "/index"}}, 
-			 {alias,{erl_alias,"/log_roller",[lr_webtool]}}
+			 {alias,{erl_alias,"/log_roller",[log_roller_webtool]}}
 			]}.
 
 %% @spec index(Env::list(), Input::list()) -> binary()

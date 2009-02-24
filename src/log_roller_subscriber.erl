@@ -93,23 +93,7 @@ current_location() ->
 %% @hidden
 %%--------------------------------------------------------------------
 init(_) ->
-	LogFile =
-		case application:get_env(log_roller, log_dir) of
-			undefined -> atom_to_list(?LOG_NAME);
-			{ok, Dir} -> 
-				case file:list_dir(Dir) of
-					{ok, _} -> 
-						Dir ++ "/" ++ atom_to_list(?LOG_NAME);
-					{error, enoent} ->
-						case file:make_dir(Dir) of
-							ok -> 
-								Dir ++ "/" ++ atom_to_list(?LOG_NAME);
-							DirErr ->
-								io:format("failed to create directory ~p: ~p~n", [Dir, DirErr]),
-								atom_to_list(?LOG_NAME)
-						end
-				end
-		end,
+	LogFile = log_file(),
 	Maxbytes = 
 		case application:get_env(log_roller, maxbytes) of
 			undefined -> 10485760;
@@ -126,18 +110,8 @@ init(_) ->
 		{type, wrap},
 		{size, {Maxbytes, Maxfiles}}
 	],
-	case disk_log:open(Args) of
-		{ok, Log} ->
-			{ok, #state{log=Log, args=Args}};
-		{repaired, Log, {recovered, _Rec}, {badbytes, _Bad}} ->
-			{ok, #state{log=Log, args=Args}};
-		{error,{file_error,_,eacces}} ->
-			io:format("insufficient permission level to open ~s~n", [LogFile]),
-			exit(eacces);
-		Err ->
-			io:format("init error: ~p~n", [Err]),
-			exit(Err)
-	end.
+	{ok, Log, Args1} = open_log(Args),
+	{ok, #state{log=Log, args=Args1}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -211,3 +185,45 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+
+log_file() ->
+	case application:get_env(log_roller, log_dir) of
+		undefined -> atom_to_list(?LOG_NAME);
+		{ok, Dir} -> 
+			case file:list_dir(Dir) of
+				{ok, _} -> 
+					Dir ++ "/" ++ atom_to_list(?LOG_NAME);
+				{error, enoent} ->
+					case file:make_dir(Dir) of
+						ok -> 
+							Dir ++ "/" ++ atom_to_list(?LOG_NAME);
+						DirErr ->
+							io:format("failed to create directory ~p: ~p~n", [Dir, DirErr]),
+							atom_to_list(?LOG_NAME)
+					end
+			end
+	end.
+	
+open_log(Args) ->
+	case disk_log:open(Args) of
+		{ok, Log} ->
+			{ok, Log, Args};
+		{repaired, Log, {recovered, _Rec}, {badbytes, _Bad}} ->
+			{ok, Log, Args};
+		{error,{file_error,_,eacces}} ->
+			io:format("insufficient permission level to open ~s~n", [proplists:get_value(file)]),
+			exit(eacces);
+		{error,{size_mismatch,_,NewSize}} ->
+			Args1 = proplists:delete(size, Args),
+			{ok, Log1, Args2} = open_log(Args1),
+			case disk_log:change_size(Log1, NewSize) of
+				ok ->
+					{ok, Log1, [{size, NewSize}|Args2]};
+				Err ->
+					io:format("init error: ~p~n", [Err]),
+					exit(Err)
+			end;
+		Err ->
+			io:format("init error: ~p~n", [Err]),
+			exit(Err)
+	end.

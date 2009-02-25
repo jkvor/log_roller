@@ -20,11 +20,10 @@ docs: all
 install: rel
 	mkdir -p ${LIBDIR}/log_roller-$(VERSION)/{ebin,include,priv}
 	for i in ebin/*.beam include/* priv/* ebin/*.app; do install $$i ${LIBDIR}/log_roller-$(VERSION)/$$i ; done
-	cp *.boot $(ROOTDIR)/bin/
+	cp bin/*.boot $(ROOTDIR)/bin/
 	mkdir -p /etc/init.d
 	mkdir -p /var/log/log_roller
 	cp log_roller_subscriber /etc/init.d/
-	cp log_roller_publisher /etc/init.d/
 	
 uninstall:
 	rm -rf ${LIBDIR}/log_roller-*

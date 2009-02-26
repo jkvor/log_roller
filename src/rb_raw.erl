@@ -46,7 +46,7 @@
 
 %% External exports
 -export([list/0, list/1]).
--export([show/0, show/1]).
+-export([show/0, show/1, show/2]).
 
 %% @spec show() -> Result
 %% @equiv show([])
@@ -57,12 +57,16 @@ show() -> show([]).
 %%		 Result = {No::integer(), Type::atom(), Descr::string(), Date::datetime(), Fname::string(), FilePosition::integer()}
 show(Opts) when is_list(Opts) ->
 	Logs = list(Opts),
-	[show(Log) || Log <- Logs];
+	[show(Log, Opts) || Log <- Logs];
 	
 %% @spec show(LogDetails) -> Result
 %%		 LogDetails = {No::integer(), Type::atom(), Descr::string(), Date::datetime(), Fname::string(), FilePosition::integer()}
-show({_No, _Type, _Descr, _Date, Fname, FilePosition}) ->
-	Dir = get_report_dir(),
+show({_No, _Type, _Descr, _Date, _Fname, _FilePosition}=Log) ->
+	show(Log, []).
+	
+%% @spec show(LogDetails, Opts) -> Result
+show({_No, _Type, _Descr, _Date, Fname, FilePosition}, Opts) ->
+	Dir = get_report_dir(Opts),
 	FileName = lists:concat([Dir, "/", Fname]),
     case file:open(FileName, [read]) of
 		{ok, Fd} -> 
@@ -80,11 +84,7 @@ list() -> list([]).
 list(Opts) when is_list(Opts) ->
 	Max = proplists:get_value(max, Opts, 100),
 	Type = proplists:get_value(type, Opts, all),
-	Dir = 
-		case proplists:get_value(report_dir, Opts) of
-			undefined -> get_report_dir();
-			Dir0 -> Dir0
-		end,
+	Dir = get_report_dir(Opts),
 	list(Max, Type, Dir).
 		
 %% internal
@@ -92,13 +92,18 @@ list(Opts) when is_list(Opts) ->
 list(Max, Type, Dir) when is_integer(Max), is_atom(Type), is_list(Dir) ->
 	scan_files(Dir ++ "/", Max, Type).
 
-get_report_dir() ->
-	case catch application:get_env(sasl, error_logger_mf_dir) of
-		{ok, Dir} -> 
-			Dir;
-		_ ->
-	    	exit("cannot locate report directory")
-    end.
+get_report_dir(Opts) ->
+	case proplists:get_value(log_dir, Opts) of
+		undefined ->
+			case catch application:get_env(sasl, error_logger_mf_dir) of
+				{ok, Dir} -> 
+					Dir;
+				_ ->
+			    	exit("cannot locate report directory")
+		    end;
+		Dir ->
+			Dir
+	end.
 
 %%-----------------------------------------------------------------
 %% Func: scan_files(RptDir, Max, Type)

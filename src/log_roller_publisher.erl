@@ -24,8 +24,10 @@
 -author('jacob.vorreuter@gmail.com').
 -behaviour(application).
 
--export([start/2, stop/1, start_phase/3]).
-	
+-export([start/2, stop/1, start_phase/3, build_rel/0]).
+
+-export([register_subscriber/1, registered_subscribers/0]).
+
 %%%
 %%% Application API
 %%%
@@ -50,5 +52,45 @@ start_phase(world, _, _) ->
 
 %% @hidden
 start_phase(discovery, _, _) ->
-	[log_roller_h:register_subscriber(Node) || Node <- [node()|nodes()]],
+	[register_subscriber(Node) || Node <- [node()|nodes()]],
+	ok.
+	
+%% @spec register_subscriber(Node::node()) -> ok
+%% @doc ping Node to determine if it is a subscriber and register with event handler if it is
+register_subscriber(Node) ->
+	case (catch rpc:call(Node, log_roller_disk_logger, ping, [])) of
+		{ok, Pid} ->
+			io:format("ping successful for ~p~n", [Node]),
+			gen_event:call(error_logger, log_roller_h, {subscribe, Pid});
+		_ ->
+			ok
+	end.
+
+registered_subscribers() ->
+	gen_event:call(error_logger, log_roller_h, subscribers).
+
+build_rel() ->
+	{ok, FD} = file:open("bin/log_roller_publisher.rel", [write]),
+	RootDir = code:root_dir(),
+	Patterns = [
+	    {RootDir ++ "/", "erts-*"},
+	    {RootDir ++ "/lib/", "kernel-*"},
+	    {RootDir ++ "/lib/", "stdlib-*"}
+	],
+	[Erts, Kerne, Stdl] = [begin
+	    [R | _ ] = filelib:wildcard(P, D),
+	    [_ | [Ra] ] = string:tokens(R, "-"),
+	    Ra
+	end || {D, P} <- Patterns],
+	RelInfo = {release,
+	    {"log_roller_publisher", "0.0.1"},
+	    {erts, Erts}, [
+	        {kernel, Kerne},
+	        {stdlib, Stdl},
+	        {log_roller_publisher, "0.0.1"}
+	    ]
+	},
+	io:format(FD, "~p.", [RelInfo]),
+	file:close(FD),
+	systools:make_script("bin/log_roller_publisher", [local]),
 	ok.

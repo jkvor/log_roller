@@ -6,13 +6,13 @@ SASL='-sasl sasl_error_logger false -sasl errlog_type all -sasl error_logger_mf_
 
 case $1 in
 'dev' )
-	erl -pa ebin -name log_roller_subscriber@$HOSTNAME +W w +A 1 -config priv/log_roller -boot bin/log_roller_subscriber -webtool start
+	erl -pa ebin -name log_roller@$HOSTNAME +W w +A 1 -config priv/log_roller -boot bin/log_roller_subscriber -webtool start
 	;;
 'console' )
-	erl -name log_roller@$HOSTNAME +W w +A 1 -config $ROOT_DIR/priv/log_roller -boot log_roller -log_roller_type subscriber -webtool start $SASL
+	erl -name log_roller@$HOSTNAME +W w +A 1 -config $ROOT_DIR/priv/log_roller -boot log_roller_subscriber -webtool start $SASL
 	;;
 'start' )
-    erl -detached -name log_roller@$HOSTNAME +W w +A 1 -config $ROOT_DIR/priv/log_roller -boot log_roller -log_roller_type subscriber -webtool start -noshell $SASL
+    erl -detached -name log_roller@$HOSTNAME +W w +A 1 -config $ROOT_DIR/priv/log_roller -boot log_roller_subscriber -webtool start -noshell $SASL
     ;;
 'stop' )
     erl -name logrollerctl@$HOSTNAME -pa $ROOT_DIR/ebin -noshell -s log_roller stop -s init stop -- log_roller@$HOSTNAME

@@ -33,22 +33,9 @@
 %% gen_event callbacks
 -export([init/1, handle_event/2, handle_call/2, handle_info/2, terminate/2, code_change/3]).
 
--export([register_subscriber/1]).
-
 -include("log_roller.hrl").
 
 -record(state, {listening_pids}).
-
-%% @spec register_subscriber(Node::node()) -> ok
-%% @doc ping Node to determine if it is a subscriber and register with event handler if it is
-register_subscriber(Node) ->
-	case (catch rpc:call(Node, log_roller_disk_logger, ping, [])) of
-		{ok, Pid} ->
-			io:format("ping successful for ~p~n", [Node]),
-			gen_event:call(error_logger, log_roller_h, {subscribe, Pid});
-		_ ->
-			ok
-	end.
 	
 %%%----------------------------------------------------------------------
 %%% Callback functions from gen_event
@@ -128,6 +115,9 @@ handle_call({subscribe, Pid0}, State) ->
 				State
 		end,
 	{ok, ok, State1};
+	
+handle_call(subscribers, State) ->
+	{ok, State#state.listening_pids, State};
 	
 handle_call(_Request, State) ->
 	io:format("handle other call: ~p~n", [_Request]),

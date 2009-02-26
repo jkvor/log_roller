@@ -9,7 +9,7 @@ ERL_OBJECTS := $(ERL_SOURCES:%.erl=./%.beam)
 all: $(ERL_OBJECTS)
 
 templates: all
-	escript priv/compile_templates.escript
+	erl -pa ebin -eval 'log_roller_webtool:compile_templates()' -s init stop -noshell
 
 clean:
 	rm -rf ebin/*.beam doc/*.html doc/*.png doc/*-info doc/*.css bin/*.boot bin/*.rel bin/*.script Mnesia* erl_crash.dump *.tgz *.1 *.idx *.siz
@@ -26,19 +26,19 @@ install: rel
 	cp log_roller_subscriber /etc/init.d/
 	
 uninstall:
-	rm -rf ${LIBDIR}/log_roller-*
-	rm $(ROOTDIR)/bin/log_roller*.boot
+	rm -rf ${LIBDIR}/log_roller*
+	rm $(ROOTDIR)/bin/log_roller*
 	rm /etc/init.d/log_roller*
 
 package: clean
-	@mkdir log_roller-$(VERSION)/ && cp -rf ebin include log_roller Makefile priv README src templates log_roller-$(VERSION)
+	@mkdir log_roller-$(VERSION)/ && cp -rf ebin include log_roller_subscriber Makefile priv README src t templates log_roller-$(VERSION)
 	@COPYFILE_DISABLE=true tar zcf log_roller-$(VERSION).tgz log_roller-$(VERSION)
 	@rm -rf log_roller-$(VERSION)/
 		
 rel: templates
 	mkdir -p bin
-	escript priv/build_rel.escript subscriber
-	escript priv/build_rel.escript publisher
+	erl -pa ebin -eval 'log_roller_publisher:build_rel()' -s init stop -noshell
+	erl -pa ebin -eval 'log_roller_subscriber:build_rel()' -s init stop -noshell
 
 test: all
 	prove -v t/*.t

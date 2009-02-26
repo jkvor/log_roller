@@ -24,7 +24,7 @@
 -author('jacob.vorreuter@gmail.com').
 -behaviour(application).
 
--export([start/2, stop/1, init/1, start_phase/3, start_webtool/0, reload/0]).
+-export([start/2, stop/1, init/1, start_phase/3, start_webtool/0, reload/0, build_rel/0]).
 	
 %%%
 %%% Application API
@@ -100,6 +100,31 @@ reload() ->
     	end 
  	 end || Module <- Modules],
 	log_roller_disk_logger:reload().
-	
+
+build_rel() ->
+	{ok, FD} = file:open("bin/log_roller_subscriber.rel", [write]),
+	RootDir = code:root_dir(),
+	Patterns = [
+	    {RootDir ++ "/", "erts-*"},
+	    {RootDir ++ "/lib/", "kernel-*"},
+	    {RootDir ++ "/lib/", "stdlib-*"}
+	],
+	[Erts, Kerne, Stdl] = [begin
+	    [R | _ ] = filelib:wildcard(P, D),
+	    [_ | [Ra] ] = string:tokens(R, "-"),
+	    Ra
+	end || {D, P} <- Patterns],
+	RelInfo = {release,
+	    {"log_roller_subscriber", "0.0.1"},
+	    {erts, Erts}, [
+	        {kernel, Kerne},
+	        {stdlib, Stdl},
+	        {log_roller_subscriber, "0.0.1"}
+	    ]
+	},
+	io:format(FD, "~p.", [RelInfo]),
+	file:close(FD),
+	systools:make_script("bin/log_roller_subscriber", [local]),
+	ok.
 	
 	

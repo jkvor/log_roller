@@ -24,10 +24,15 @@
 %% @doc A webtool module that provides a user interface for log browsing
 -module(log_roller_webtool).
 
--export([config_data/0]).
--export([index/2, logs/2]).
+-export([compile_templates/0, config_data/0, index/2, logs/2]).
 
 -define(TOOL_BASE_URL, "/log_roller/log_roller_webtool").
+
+compile_templates() ->
+	{ok, Filenames} = file:list_dir("templates"),
+	[erltl:compile("templates/" ++ Filename, [{outdir, "ebin"}, report_errors, report_warnings, nowarn_unused_vars]) 
+		|| Filename <- Filenames],
+	ok.
 
 %% @spec config_data() -> {log_roller, Args::list()}
 %% @doc fetch config data for loading module in webtool

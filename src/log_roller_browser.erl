@@ -38,7 +38,10 @@
 
 -include("log_roller.hrl").
 
--record(state, {header, handles}).
+%% cache = [{FileNo, Ranges}]
+%% Ranges = [{StartByte, StopByte, Logs}]
+
+-record(state, {header, handles, cache}).
 
 -define(MAX_CHUNK_SIZE, 65536).
 -define(HEADER_SIZE, 14).

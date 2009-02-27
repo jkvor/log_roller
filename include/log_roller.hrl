@@ -20,4 +20,8 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
+
 -record(log_entry, {time, type, node, message}).
+
+-define(Bin_Term_Start, <<16#FF, 16#FF, 16#FF, 16#FF>>).
+-define(Bin_Term_Stop, <<16#EE, 16#EE, 16#EE, 16#EE>>).

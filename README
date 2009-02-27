@@ -110,3 +110,4 @@ OTHER DEALINGS IN THE SOFTWARE.
 == TODO ==
 * make reading faster - add map/reduce algorithm for chunking and
   parsing logs
+* filter logs

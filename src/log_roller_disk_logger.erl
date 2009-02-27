@@ -33,9 +33,11 @@
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([reload/0, subscribe_to/1, ping/0, current_location/0]).
+-export([reload/0, subscribe_to/1, ping/0, total_writes/0, current_location/0]).
 
--record(state, {log, args}).
+-include("log_roller.hrl").
+
+-record(state, {log, args, total_writes}).
 
 -define(LOG_NAME, log_roller_data).
 
@@ -67,6 +69,9 @@ subscribe_to(Node) when is_atom(Node) ->
 %% @doc respond to ping requests sent from publisher nodes with the gen_server process id
 ping() ->
 	gen_server:call(?MODULE, ping).
+	
+total_writes() ->
+	gen_server:call(?MODULE, total_writes).
 
 %% @spec current_location() -> Result
 %%		 Result = {FileStub, Index, Pos, SizeLimit, MaxIndex}
@@ -121,6 +126,9 @@ handle_call({subscribe_to, Node}, _From, State) ->
 
 handle_call(ping, _From, State) ->
 	{reply, {ok, self()}, State};
+
+handle_call(total_writes, _From, State) ->
+	{reply, State#state.total_writes, State};	
 	
 handle_call(current_location, _From, #state{log=Log, args=Args}=State) ->
 	Infos = disk_log:info(Log),
@@ -148,10 +156,11 @@ handle_cast(_Message, State) -> {noreply, State}.
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({log_roller, _Sender, LogEntry}, #state{log=Log}=State) ->
-	io:format("writing a log for ~p~n", [Log]),
-	ok = disk_log:log(Log, LogEntry),
-	{noreply, State};
+handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, total_writes=Writes}=State) ->
+	BinLog = term_to_binary(LogEntry),
+	LogSize = size(BinLog),
+	ok = disk_log:blog(Log, <<?Bin_Term_Start/binary, BinLog:LogSize/binary, LogSize:16, ?Bin_Term_Stop/binary>>),
+	{noreply, State#state{total_writes=Writes+1}};
 
 handle_info(_Info, State) -> {noreply, State}.
 
@@ -215,7 +224,7 @@ initialize_state() ->
 		{size, {Maxbytes, Maxfiles}}
 	],
 	{ok, Log, Args1} = open_log(Args),
-	#state{log=Log, args=Args1}.
+	#state{log=Log, args=Args1, total_writes=0}.
 	
 open_log(Args) ->
 	case disk_log:open(Args) of

@@ -1,24 +1,37 @@
 #!/usr/bin/env escript
 %% -*- erlang -*-
-%%! -pa ebin -config priv/log_roller -noshell
+%%! -pa ebin -noshell
 
 main(_) ->
     etap:plan(5),
 
-	etap_application:load_ok(log_roller_subscriber, "Application 'log_roller_subscriber' loaded"),
-	etap_application:load_ok(log_roller_publisher, "Application 'log_roller_publisher' loaded"),
+	etap_exception:lives_ok(fun() ->
+		etap_application:load_ok(log_roller_subscriber, "Application 'log_roller_subscriber' loaded"),
+		etap_application:load_ok(log_roller_publisher, "Application 'log_roller_publisher' loaded"),
+		ok
+	end, "load log roller"),
 	
 	Log_Dir = rnd_dir(),
 	application:set_env(log_roller_subscriber, log_dir, Log_Dir),
 	
-	etap_application:start_ok(log_roller_subscriber, "Application 'log_roller_subscriber' started"),
-	etap_application:start_ok(log_roller_publisher, "Application 'log_roller_publisher' started"),
+	etap_exception:lives_ok(fun() ->
+		etap_application:start_ok(log_roller_subscriber, "Application 'log_roller_subscriber' started"),
+		etap_application:start_ok(log_roller_publisher, "Application 'log_roller_publisher' started"),
+		ok
+	end, "start log roller"),
 	
-	ok = error_logger:info_msg("this is a test"),
+	ok = error_logger:info_msg("this is a test~n"),
 	
-	timer:sleep(1000),
+	etap_exception:lives_ok(fun() ->
+		{ok, Binary} = file:read_file(Log_Dir ++ "/log_roller_data.1"),
+		io:format("bin: ~p~n", [Binary]),
+		ok
+	end, "read file"),
 	
-	io:format("~p~n", [lrb:fetch()]),
+	etap_exception:lives_ok(fun() ->
+		io:format("~p~n", [lrb:fetch()]),
+		ok
+	end, "fetch log"),
 	
 	etap:is(rm_dir(Log_Dir), ok, "remove temp log directory"),
 

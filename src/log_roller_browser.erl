@@ -41,10 +41,7 @@
 %% cache = [{FileNo, Ranges}]
 %% Ranges = [{StartByte, StopByte, Logs}]
 
--record(state, {header, handles, cache}).
-
--define(MAX_CHUNK_SIZE, 65536).
--define(HEADER_SIZE, 14).
+-record(state, {handles, cache}).
 
 %%====================================================================
 %% API
@@ -82,7 +79,7 @@ fetch(Opts) when is_list(Opts) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init(_) ->
-	{ok, #state{header=header_binary(), handles=dict:new()}}.
+	{ok, #state{handles=dict:new()}}.
 
 %%--------------------------------------------------------------------
 %% Function: handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -95,15 +92,8 @@ init(_) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_call({fetch, Opts}, _From, State) ->
-	Max = proplists:get_value(max, Opts, 100),
-	
-	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
-
-	{Index1, Pos1} = rewind_location(Index, Pos, SizeLimit, MaxIndex),
-	
-	{ok, State1, Res} = chunk(State, {FileStub, Index1, Pos1, SizeLimit, MaxIndex}, Opts, [], Max),
-	
-	{reply, lists:reverse(Res), State1};
+	{ok, Results, State1} = fetch(State, Opts, proplists:get_value(max, Opts, 100)),
+	{reply, lists:reverse(Results), State1};
 		
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 
@@ -146,112 +136,25 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%% Internal functions
 %%--------------------------------------------------------------------
 
-chunk(State, _, _, Acc, Max) when length(Acc) >= Max -> {ok, State, Acc};
+fetch(State, Opts, Max) -> fetch(State, Opts, Max, [], start).
 
-chunk(#state{header=Header, handles=Handles}=State, {FileStub, Index, Pos, SizeLimit, MaxIndex}, Opts, Acc, Max) ->
+fetch(State, _Opts, Max, Acc, _Continuation) when length(Acc) >= Max -> {ok, Acc, State};
 
-	FileName = lists:flatten(io_lib:format("~s.~w", [FileStub, Index])),
-	
-	Bytes =
-		if 
-			Pos + ?MAX_CHUNK_SIZE > SizeLimit ->
-				SizeLimit - Pos;
-			true -> 
-				Pos + ?MAX_CHUNK_SIZE
-		end,
-			
-	case file_handle(FileName, Handles) of
-		{ok, Handles1, IoDevice} ->
-			%io:format("pos/bytes: ~p and ~p~n", [Pos, Bytes]),
-			case file:pread(IoDevice, Pos, Bytes) of
-				{ok, Chunk} -> 
-					%io:format("chunk: ~p~n", [Chunk]),
-					State1 = State#state{handles=Handles1},
-					Acc1 = parse_terms(reverse(Chunk), <<>>, Header, Opts, Acc, Max),
-					{Index1, Pos1} = rewind_location(Index, Pos, SizeLimit, MaxIndex),
-					chunk(State1, {FileStub, Index1, Pos1, SizeLimit, MaxIndex}, Opts, Acc1, Max);
-				eof ->
-					{ok, State, Acc};
-				{error, Reason} -> 
-					io:format("error reading file pread(~p, ~p, ~p): ~p~n", [IoDevice, Pos, Bytes, Reason]),
-					{ok, State, Acc}
-			end;
-		{error, Handles, enoent} ->
-			{ok, State, Acc}
-	end.
-		
-rewind_location(Index, Pos, SizeLimit, MaxIndex) ->
-	%io:format("rewind location ~p, ~p, ~p, ~p~n", [Index, Pos, SizeLimit, MaxIndex]),
-	if
-		Pos =:= 0 -> %% move to previous index file
-			%io:format("position zero~n"),
-			Index1 =
-				if
-					Index =< 1 -> %% base index, cycle to top index
-						MaxIndex;
-					true ->
-						Index - 1
-				end,	
-			Pos1 =
-				if
-					SizeLimit =< ?MAX_CHUNK_SIZE ->
-						0;
-					true ->
-						SizeLimit - ?MAX_CHUNK_SIZE
-				end,
-			{Index1, Pos1};
-		Pos =< ?MAX_CHUNK_SIZE -> %% less than one chunk left
-			%io:format("~p =< ~p~n", [Pos, ?MAX_CHUNK_SIZE]),
-			{Index, 0};
-		true -> %% more than a chunk's worth left
-			%io:format("~p - ~p~n", [Pos, ?MAX_CHUNK_SIZE]),
-			{Index, Pos - ?MAX_CHUNK_SIZE}
-	end.	
-
-			
-file_handle(FileName, Handles) ->
-	case dict:find(FileName, Handles) of
-		{ok, IoDevice} ->
-			{ok, Handles, IoDevice};
-		error ->
-			case file:open(FileName, [read]) of
-				{ok, IoDevice} ->
-					Handles1 = dict:store(FileName, IoDevice, Handles),
-					{ok, Handles1, IoDevice};
-				{error, enoent} ->
-					{error, Handles, enoent};
-				Err ->
-					exit(Err)
-			end
+fetch(#state{handles=Handles}=State, Opts, Max, Acc, Continuation) ->
+	io:format("log_roller_browser:fetch(~p, ~p, ~p, ~p, ~p)~n", [State, Opts, Max, Acc, Continuation]),
+	{ok, Handles1, Terms, Continuation1} = log_roller_disk_reader:chunk(Handles, Continuation),
+	case filter(Terms, Opts, Max, Acc) of
+		{ok, Acc1} ->
+			fetch(State#state{handles=Handles1}, Opts, Max, Acc1, Continuation1);
+		{error, _Reason, Acc1} ->
+			{ok, Acc1, State#state{handles=Handles1}}
 	end.
 
-parse_terms(_, _, _, _, Acc, Max) when length(Acc) >= Max -> Acc;
+filter([], _Opts, _Max, Acc) -> {ok, Acc};
 
-parse_terms(<<>>, _, _, _, Acc, _) -> Acc;
-	
-parse_terms(<<Header:?HEADER_SIZE/binary, Rest/binary>>, TermAcc, Header, Opts, Acc, Max) ->
-	BinTerm = reverse(<<TermAcc/binary, Header/binary>>),
-	%io:format("bin term: ~p~n", [BinTerm]),
-	case (catch binary_to_term(BinTerm)) of
-		Term when is_record(Term, log_entry) ->
-			case filter(Term, Opts) of
-				false ->
-					parse_terms(Rest, <<>>, Header, Opts, Acc, Max);
-				Term1 ->
-					parse_terms(Rest, <<>>, Header, Opts, [Term1|Acc], Max)
-			end;
-		{'EXIT',{badarg,_}} ->
-			io:format("bad argument parsing binary term: ~p~n", [BinTerm]),
-			Acc;
-		Err ->
-			io:format("failed converting to term: ~p~n", [Err]),
-			Acc
-	end;
-	
-parse_terms(<<A:1/binary, Rest/binary>>, TermAcc, Header, Opts, Acc, Max) ->
-	parse_terms(Rest, <<TermAcc/binary, A/binary>>, Header, Opts, Acc, Max).
-	
-filter({log_entry, Time, Type, Node, Msg}, Opts) ->
+filter(_Results, _Opts, Max, Acc) when length(Acc) >= Max -> {ok, Acc};
+
+filter([{log_entry, Time, Type, Node, Msg}|Tail], Opts, Max, Acc) ->
 	Types = proplists:get_all_values(type, Opts),
 	Nodes = proplists:get_all_values(node, Opts),
 	Grep  = 
@@ -307,20 +210,12 @@ filter({log_entry, Time, Type, Node, Msg}, Opts) ->
 		
 	Term = [format_time(Time), Type, Node, Msg],
 	case [ Type_Fun(Type), Node_Fun(Node), Grep_Fun(Term) ] of
-		[true, true, true] -> Term;
-		_ -> false
+		[true, true, true] -> 
+			filter(Tail, Opts, Max, [Term|Acc]);
+		_ -> 
+			filter(Tail, Opts, Max, Acc)
 	end.
 	
 format_time({Mega,Secs,Micro}) ->
 	{{Y,Mo,D},{H,Mi,S}} = calendar:now_to_local_time({Mega,Secs,Micro}),
 	lists:flatten(io_lib:format("~w-~2.2.0w-~2.2.0w ~2.2.0w:~2.2.0w:~2.2.0w:~w", [Y,Mo,D,H,Mi,S,Micro])).	
-
-header_binary() ->
-	<<Header:?HEADER_SIZE/binary,_/binary>> = term_to_binary({log_entry,0,0,0,0}),
-	reverse(Header).
-	
-reverse(IoList) when is_list(IoList) ->
-	list_to_binary(lists:reverse(lists:flatten(IoList)));
-	
-reverse(Binary) when is_binary(Binary) -> 
-	list_to_binary(lists:reverse(binary_to_list(Binary))).

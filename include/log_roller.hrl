@@ -23,5 +23,6 @@
 
 -record(log_entry, {time, type, node, message}).
 
+-define(MAX_CHUNK_SIZE, 65536).
 -define(Bin_Term_Start, <<16#FF, 16#FF, 16#FF, 16#FF>>).
 -define(Bin_Term_Stop, <<16#EE, 16#EE, 16#EE, 16#EE>>).

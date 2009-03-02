@@ -231,6 +231,8 @@ initialize_state() ->
 		{name, ?LOG_NAME},
 		{file, LogFile},
 		{type, wrap},
+		{format, external},
+		{head, none},
 		{notify, true},
 		{size, {Maxbytes, Maxfiles}}
 	],

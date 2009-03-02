@@ -56,13 +56,17 @@ chunk(Handles, {continuation, FileStub, Index, Pos, _SizeLimit, _MaxIndex, LTime
 					BinChunk = list_to_binary(Chunk),
 					Bin = <<BinChunk/binary, BinRem/binary>>,
 					%io:format("chunk: ~p~n", [Bin]),
-					{ok, Terms, BinRem1, LTimestamp1} = parse_terms(Bin, <<>>, [], {9999,0,0}),
-					case full_cycle(LTimestamp1, LTimestamp) of
-						true ->
-							{error, read_full_cycle};
-						false ->
-							{ok, Continuation1} = rewind_location(Continuation),
-							{ok, Handles1, Continuation1#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1}, Terms}
+					case parse_terms(Bin, <<>>, [], {9999,0,0}) of
+						{ok, Terms, BinRem1, LTimestamp1} ->
+							case full_cycle(LTimestamp1, LTimestamp) of
+								true ->
+									{error, read_full_cycle};
+								false ->
+									{ok, Continuation1} = rewind_location(Continuation),
+									{ok, Handles1, Continuation1#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1}, Terms}
+							end;
+						{error, Reason} ->
+							{error, Reason}
 					end;
 				eof ->
 					{error, eof};
@@ -147,10 +151,15 @@ parse_terms(<<16#FF:8, 16#FF:8, 16#FF:8, 16#FF:8, LogSize:16/integer, Rest/binar
 	%io:format("parse terms: ~p~n", [LogSize]),
 	if 
 		size(Rest) >= LogSize ->
-			<<Log:LogSize/binary, 16#EE:8, 16#EE:8, 16#EE:8, 16#EE:8, Tail/binary>> = Rest,
-			Term = binary_to_term(Log),
-			%io:format("term: ~p and tail: ~p~n", [Term, Tail]),
-			parse_terms(Tail, Rem, [Term|Acc], Term#log_entry.time);
+			case Rest of
+				<<Log:LogSize/binary, 16#EE:8, 16#EE:8, 16#EE:8, 16#EE:8, Tail/binary>> ->
+					Term = binary_to_term(Log),
+					%io:format("term: ~p and tail: ~p~n", [Term, Tail]),
+					parse_terms(Tail, Rem, [Term|Acc], Term#log_entry.time);
+				_ ->
+					io:format("bad binary data: ~n~p~n", [Bin]),
+					{error, bad_binary_data_format}
+			end;
 		true ->
 			{ok, Acc, Bin, LTimestamp}
 	end;
@@ -159,6 +168,7 @@ parse_terms(<<>>, Rem, Acc, LTimestamp) ->
 	{ok, Acc, Rem, LTimestamp};
 	
 parse_terms(<<A:8, Rest/binary>>, Rem, Acc, LTimestamp) ->
+	%io:format("parse terms ~p, ~p~n", [A, Rest]),
 	parse_terms(Rest, <<Rem/binary, A>>, Acc, LTimestamp).
 	
 full_cycle({A1,B1,C1}, {A2,B2,C2}) ->

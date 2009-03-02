@@ -141,20 +141,27 @@ fetch(State, Opts, Max) -> fetch(State, Opts, Max, [], start).
 fetch(State, _Opts, Max, Acc, _Continuation) when length(Acc) >= Max -> {ok, Acc, State};
 
 fetch(#state{handles=Handles}=State, Opts, Max, Acc, Continuation) ->
-	io:format("log_roller_browser:fetch(~p, ~p, ~p, ~p, ~p)~n", [State, Opts, Max, Acc, Continuation]),
-	{ok, Handles1, Terms, Continuation1} = log_roller_disk_reader:chunk(Handles, Continuation),
-	case filter(Terms, Opts, Max, Acc) of
-		{ok, Acc1} ->
-			fetch(State#state{handles=Handles1}, Opts, Max, Acc1, Continuation1);
-		{error, _Reason, Acc1} ->
-			{ok, Acc1, State#state{handles=Handles1}}
+	%io:format("log_roller_browser:fetch(~p, ~p, ~p, ~p, ~p)~n", [State, Opts, Max, Acc, Continuation]),
+	case log_roller_disk_reader:chunk(Handles, Continuation) of
+		{ok, Handles1, Continuation1, Terms} ->
+			case filter(Terms, Opts, Max, Acc) of
+				{ok, Acc1} ->
+					%io:format("Continuation1: ~p~n", [Continuation1]),
+					fetch(State#state{handles=Handles1}, Opts, Max, Acc1, Continuation1);
+				{error, _Reason, Acc1} ->
+					{ok, Acc1, State#state{handles=Handles1}}
+			end;
+		{error, _Reason} ->
+			%io:format("~p~n", [{error, Reason}]),
+			{ok, Acc, State}
 	end.
-
+	
 filter([], _Opts, _Max, Acc) -> {ok, Acc};
 
 filter(_Results, _Opts, Max, Acc) when length(Acc) >= Max -> {ok, Acc};
 
 filter([{log_entry, Time, Type, Node, Msg}|Tail], Opts, Max, Acc) ->
+	%io:format("filter ~p~n", [{log_entry, Time, Type, Node, Msg}]),
 	Types = proplists:get_all_values(type, Opts),
 	Nodes = proplists:get_all_values(node, Opts),
 	Grep  = 

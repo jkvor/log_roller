@@ -33,30 +33,37 @@
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
 
--record(continuation, {file_stub, index, position, size_limit, max_index, bin_remainder}).
+-record(continuation, {file_stub, index, position, size_limit, max_index, last_timestamp, bin_remainder}).
 
 chunk(Handles, start) ->
 	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
-	io:format("start location: ~p, ~p, ~p, ~p, ~p~n", [FileStub, Index, Pos, SizeLimit, MaxIndex]),
-	case rewind_location({continuation, FileStub, Index, Pos, SizeLimit, MaxIndex, <<>>}) of
+	%io:format("start location: ~p, ~p, ~p, ~p, ~p~n", [FileStub, Index, Pos, SizeLimit, MaxIndex]),
+	case rewind_location({continuation, FileStub, Index, Pos, SizeLimit, MaxIndex, {9999,0,0}, <<>>}) of
 		{ok, Continuation1} ->
 			chunk(Handles, Continuation1);
 		{error, Reason} ->
 			{error, Reason}
 	end;
 	
-chunk(Handles, {continuation, FileStub, Index, Pos, _SizeLimit, _MaxIndex, BinRem} = Continuation) ->
-	io:format("log_roller_disk_reader:chunk(~p, ~p)~n", [Handles, Continuation]),
+chunk(Handles, {continuation, FileStub, Index, Pos, _SizeLimit, _MaxIndex, LTimestamp, BinRem} = Continuation) ->
+	%io:format("log_roller_disk_reader:chunk(~p, ~p)~n", [Handles, Continuation]),
 	FileName = lists:flatten(io_lib:format("~s.~w", [FileStub, Index])),
 	case file_handle(FileName, Handles) of
 		{ok, Handles1, IoDevice} ->
-			io:format("pread(~p, ~p, ~p)~n", [IoDevice, Pos, ?MAX_CHUNK_SIZE]),
+			%io:format("pread(~p, ~p, ~p)~n", [IoDevice, Pos, ?MAX_CHUNK_SIZE]),
 			case file:pread(IoDevice, Pos, ?MAX_CHUNK_SIZE) of
 				{ok, Chunk} -> 
-					io:format("chunk: ~p~n", [Chunk]),
-					{ok, Terms, BinRem1} = parse_terms(reverse(<<Chunk/binary, BinRem/binary>>), []),
-					{ok, Continuation1} = rewind_location(Continuation),
-					{ok, Handles1, Continuation1#continuation{bin_remainder=BinRem1}, Terms};
+					BinChunk = list_to_binary(Chunk),
+					Bin = <<BinChunk/binary, BinRem/binary>>,
+					%io:format("chunk: ~p~n", [Bin]),
+					{ok, Terms, BinRem1, LTimestamp1} = parse_terms(Bin, <<>>, [], {9999,0,0}),
+					case full_cycle(LTimestamp1, LTimestamp) of
+						true ->
+							{error, read_full_cycle};
+						false ->
+							{ok, Continuation1} = rewind_location(Continuation),
+							{ok, Handles1, Continuation1#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1}, Terms}
+					end;
 				eof ->
 					{error, eof};
 				{error, Reason} -> 
@@ -66,7 +73,7 @@ chunk(Handles, {continuation, FileStub, Index, Pos, _SizeLimit, _MaxIndex, BinRe
 			{error, Reason}
 	end.
 		
-rewind_location({continuation, FileStub, Index, Pos, SizeLimit, MaxIndex, BinRem}) ->
+rewind_location({continuation, FileStub, Index, Pos, SizeLimit, MaxIndex, LTimestamp, BinRem}) ->
 	if
 		%% file handle was left at beginning of file
 		Pos =:= 0 -> 
@@ -81,14 +88,14 @@ rewind_location({continuation, FileStub, Index, Pos, SizeLimit, MaxIndex, BinRem
 							true ->
 								0
 						end,
-					{ok, {continuation, FileStub, Index1, Pos1, SizeLimit, MaxIndex, BinRem}};
+					{ok, {continuation, FileStub, Index1, Pos1, SizeLimit, MaxIndex, LTimestamp, BinRem}};
 				{error, Reason} ->
 					{error, Reason}
 			end;
 		Pos =< ?MAX_CHUNK_SIZE -> %% less than one chunk left
-			{ok, {continuation, FileStub, Index, 0, SizeLimit, MaxIndex, BinRem}};
+			{ok, {continuation, FileStub, Index, 0, SizeLimit, MaxIndex, LTimestamp, BinRem}};
 		true -> %% more than a chunk's worth left
-			{ok, {continuation, FileStub, Index, Pos - ?MAX_CHUNK_SIZE, SizeLimit, MaxIndex, BinRem}}
+			{ok, {continuation, FileStub, Index, Pos - ?MAX_CHUNK_SIZE, SizeLimit, MaxIndex, LTimestamp, BinRem}}
 	end.	
 
 %% if Index and StartingIndex match then we've cycled all the way around
@@ -131,22 +138,31 @@ file_handle(FileName, Handles) ->
 			end
 	end.
 
-%% @spec parse_terms(Bin, Acc) -> Result
+%% @spec parse_terms(Bin, Rem, Acc) -> Result
 %%		 Bin = binary()
+%%		 Rem = binary()
 %%		 Acc = list()
 %%		 Result = {ok, Terms, Rem}
-parse_terms(<<16#EE:1, 16#EE:1, 16#EE:1, 16#EE:1, LogSize:2, Rest/binary>> = Bin, Acc) ->
+parse_terms(<<16#FF:8, 16#FF:8, 16#FF:8, 16#FF:8, LogSize:16/integer, Rest/binary>> = Bin, Rem, Acc, LTimestamp) ->
+	%io:format("parse terms: ~p~n", [LogSize]),
 	if 
 		size(Rest) >= LogSize ->
-			<<Log:LogSize, 16#FF, 16#FF, 16#FF, 16#FF, Tail/binary>> = Rest,
+			<<Log:LogSize/binary, 16#EE:8, 16#EE:8, 16#EE:8, 16#EE:8, Tail/binary>> = Rest,
 			Term = binary_to_term(Log),
-			parse_terms(Tail, [Term|Acc]);
+			%io:format("term: ~p and tail: ~p~n", [Term, Tail]),
+			parse_terms(Tail, Rem, [Term|Acc], Term#log_entry.time);
 		true ->
-			{ok, Acc, Bin}
-	end.
-
-reverse(IoList) when is_list(IoList) ->
-	list_to_binary(lists:reverse(lists:flatten(IoList)));
+			{ok, Acc, Bin, LTimestamp}
+	end;
 	
-reverse(Binary) when is_binary(Binary) -> 
-	list_to_binary(lists:reverse(binary_to_list(Binary))).
+parse_terms(<<>>, Rem, Acc, LTimestamp) ->
+	{ok, Acc, Rem, LTimestamp};
+	
+parse_terms(<<A:8, Rest/binary>>, Rem, Acc, LTimestamp) ->
+	parse_terms(Rest, <<Rem/binary, A>>, Acc, LTimestamp).
+	
+full_cycle({A1,B1,C1}, {A2,B2,C2}) ->
+	if 
+		A1 >= A2, B1 >= B2, C1 >= C2 -> true;
+		true -> false
+	end.

@@ -4,6 +4,7 @@
 
 main(_) ->
     etap:plan(5),
+	ok = error_logger:tty(false),
 
 	etap_exception:lives_ok(fun() ->
 		etap_application:load_ok(log_roller_subscriber, "Application 'log_roller_subscriber' loaded"),
@@ -13,6 +14,8 @@ main(_) ->
 	
 	Log_Dir = rnd_dir(),
 	application:set_env(log_roller_subscriber, log_dir, Log_Dir),
+	application:set_env(log_roller_subscriber, maxbytes, 3000),
+	application:set_env(log_roller_subscriber, maxfiles, 10),
 	
 	etap_exception:lives_ok(fun() ->
 		etap_application:start_ok(log_roller_subscriber, "Application 'log_roller_subscriber' started"),
@@ -20,13 +23,12 @@ main(_) ->
 		ok
 	end, "start log roller"),
 	
-	ok = error_logger:info_msg("this is a test~n"),
-	
-	etap_exception:lives_ok(fun() ->
-		{ok, Binary} = file:read_file(Log_Dir ++ "/log_roller_data.1"),
-		io:format("bin: ~p~n", [Binary]),
-		ok
-	end, "read file"),
+	[error_logger:info_msg("this is test ~w~n", [I]) || I <- lists:seq(1,50)],
+	%% NOTE: since info messages are being sent to the log_roller handler asynchronously
+	%% and then cached in the disk_log gen_server we must both wait for the disk_log to 
+	%% receive them all and then flush the disk_log cache before trying to read from disk
+	timer:sleep(200),
+	ok = log_roller_disk_logger:sync(),
 	
 	etap_exception:lives_ok(fun() ->
 		io:format("~p~n", [lrb:fetch()]),

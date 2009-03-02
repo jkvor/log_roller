@@ -33,7 +33,7 @@
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([reload/0, subscribe_to/1, ping/0, total_writes/0, current_location/0]).
+-export([reload/0, sync/0, subscribe_to/1, ping/0, total_writes/0, current_location/0]).
 
 -include("log_roller.hrl").
 
@@ -54,6 +54,11 @@ start_link() ->
 %% @doc reload using config values
 reload() ->
 	gen_server:call(?MODULE, reload).
+	
+%% @spec sync() -> ok | {error, Reason}
+%% @doc call disk_log:sync() and force flush of cache
+sync() ->
+	gen_server:call(?MODULE, sync).
 	
 %% @spec subscribe_to(Node) -> ok
 %%		 Node = list() | node()
@@ -119,6 +124,9 @@ init(_) ->
 handle_call(reload, _From, #state{log=Log}) ->
 	disk_log:close(Log),
 	{reply, ok, initialize_state()};
+
+handle_call(sync, _From, #state{log=Log}=State) ->	
+	{reply, disk_log:sync(Log), State};
 	
 handle_call({subscribe_to, Node}, _From, State) ->
 	Res = gen_event:call({error_logger, Node}, log_roller_h, {subscribe, self()}),
@@ -159,10 +167,12 @@ handle_cast(_Message, State) -> {noreply, State}.
 handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, total_writes=Writes}=State) ->
 	BinLog = term_to_binary(LogEntry),
 	LogSize = size(BinLog),
-	ok = disk_log:blog(Log, <<?Bin_Term_Start/binary, BinLog:LogSize/binary, LogSize:16, ?Bin_Term_Stop/binary>>),
+	Bin = <<?Bin_Term_Start/binary, LogSize:16, BinLog:LogSize/binary, ?Bin_Term_Stop/binary>>,
+	%io:format("log for ~p: ~p~n", [Log, Bin]),
+	ok = disk_log:blog(Log, Bin),
 	{noreply, State#state{total_writes=Writes+1}};
 
-handle_info(_Info, State) -> {noreply, State}.
+handle_info(_Info, State) -> io:format("info: ~p~n", [_Info]), {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% Function: terminate(Reason, State) -> void()
@@ -221,6 +231,7 @@ initialize_state() ->
 		{name, ?LOG_NAME},
 		{file, LogFile},
 		{type, wrap},
+		{notify, true},
 		{size, {Maxbytes, Maxfiles}}
 	],
 	{ok, Log, Args1} = open_log(Args),
@@ -229,6 +240,7 @@ initialize_state() ->
 open_log(Args) ->
 	case disk_log:open(Args) of
 		{ok, Log} ->
+			%io:format("open log ~p for ~p~n", [Log, Args]),
 			{ok, Log, Args};
 		{repaired, Log, {recovered, _Rec}, {badbytes, _Bad}} ->
 			{ok, Log, Args};

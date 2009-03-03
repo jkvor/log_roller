@@ -23,7 +23,7 @@ main(_) ->
 		ok
 	end, "start log roller"),
 	
-	Num = 1000,
+	Num = 10000,
 	Text = "Quisque non metus at justo gravida gravida. Vivamus ullamcorper eros sed dui. In ultrices dui vel leo. Duis nisi massa, vestibulum sed, mattis quis, mollis sit amet, urna. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Integer velit nunc, ultrices vitae, sagittis sit amet, euismod in, leo. Sed bibendum, ipsum at faucibus vulputate, est ipsum mollis odio, quis iaculis justo purus non nisl. Aenean tellus nisl, pellentesque in, consectetur non, vestibulum sit amet, nibh. Donec diam. Quisque eros. Etiam dictum tellus et ante. Donec fermentum lectus non augue. Maecenas justo. Aenean et metus ac nunc pharetra congue. Mauris rhoncus justo vitae tortor. Sed ornare tristique neque. In eu enim auctor sem tincidunt vestibulum. Aliquam erat volutpat. Nulla et diam ac magna porttitor molestie. Vestibulum massa erat, tristique sed, venenatis et, sagittis in, mauris.",
 	io:format("sending logs~n"),
 	[error_logger:info_msg("~s: ~w~n", [Text, I]) || I <- lists:seq(1,Num)],
@@ -35,8 +35,10 @@ main(_) ->
 	ok = log_roller_disk_logger:sync(),
 	
 	etap_exception:lives_ok(fun() ->
-		Res = lrb:fetch([{max, 1000}]),
-		%io:format("res: ~p~n", [Res]),
+		io:format("fetching~n"),
+		Res = fprof:apply(lrb, fetch, [[{max, Num}]]),
+		fprof:profile(),
+		fprof:analyse(),
 		etap:is(length(Res), Num, "fetched correct number of results"),
 		ok
 	end, "fetch log"),

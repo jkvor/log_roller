@@ -6,6 +6,8 @@ main(_) ->
     etap:plan(5),
 	ok = error_logger:tty(false),
 
+	timer:start_link(),
+	
 	etap_exception:lives_ok(fun() ->
 		etap_application:load_ok(log_roller_subscriber, "Application 'log_roller_subscriber' loaded"),
 		etap_application:load_ok(log_roller_publisher, "Application 'log_roller_publisher' loaded"),
@@ -23,10 +25,12 @@ main(_) ->
 		ok
 	end, "start log roller"),
 	
+	error_logger:error_msg("Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy"),
+	
 	Num = 10000,
 	Text = "Quisque non metus at justo gravida gravida. Vivamus ullamcorper eros sed dui. In ultrices dui vel leo. Duis nisi massa, vestibulum sed, mattis quis, mollis sit amet, urna. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Integer velit nunc, ultrices vitae, sagittis sit amet, euismod in, leo. Sed bibendum, ipsum at faucibus vulputate, est ipsum mollis odio, quis iaculis justo purus non nisl. Aenean tellus nisl, pellentesque in, consectetur non, vestibulum sit amet, nibh. Donec diam. Quisque eros. Etiam dictum tellus et ante. Donec fermentum lectus non augue. Maecenas justo. Aenean et metus ac nunc pharetra congue. Mauris rhoncus justo vitae tortor. Sed ornare tristique neque. In eu enim auctor sem tincidunt vestibulum. Aliquam erat volutpat. Nulla et diam ac magna porttitor molestie. Vestibulum massa erat, tristique sed, venenatis et, sagittis in, mauris.",
 	io:format("sending logs~n"),
-	[error_logger:info_msg("~s: ~w~n", [Text, I]) || I <- lists:seq(1,Num)],
+	[error_logger:info_msg("~s: ~w~n", [Text, I]) || I <- lists:seq(1,Num-1)],
 	%% NOTE: since info messages are being sent to the log_roller handler asynchronously
 	%% and then cached in the disk_log gen_server we must both wait for the disk_log to 
 	%% receive them all and then flush the disk_log cache before trying to read from disk
@@ -36,14 +40,19 @@ main(_) ->
 	
 	etap_exception:lives_ok(fun() ->
 		io:format("fetching~n"),
-		Res = fprof:apply(lrb, fetch, [[{max, Num}]]),
-		fprof:profile(),
-		fprof:analyse(),
-		etap:is(length(Res), Num, "fetched correct number of results"),
+		%Res = lrb:fetch([{max, Num}]),
+		%etap:is(length(Res), Num, "fetched correct number of results"),
+		T_1 = now(),
+		Res = lrb:fetch([{type, error}]),
+		timer:record(fetch, T_1, now()),
+		etap:is(length(Res), 1, "fetched correct number of results"),
+		io:format("result: ~p~n", [Res]),
 		ok
 	end, "fetch log"),
 	
 	etap:is(rm_dir(Log_Dir), ok, "remove temp log directory"),
+	
+	timer:print([{detailed, false}]),
 
     etap:end_tests().
 

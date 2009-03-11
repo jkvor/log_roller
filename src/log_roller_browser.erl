@@ -34,14 +34,14 @@
 -export([terminate/2, code_change/3]).
 
 %% API exports
--export([fetch/0, fetch/1]).
+-export([fetch/0, fetch/1, set_current_file/1]).
 
 -include("log_roller.hrl").
 
 %% cache = [{FileNo, Ranges}]
 %% Ranges = [{StartByte, StopByte, Logs}]
 
--record(state, {handles, cache}).
+-record(state, {handles, cache, current_index}).
 
 %%====================================================================
 %% API
@@ -66,6 +66,9 @@ fetch() -> fetch([]).
 fetch(Opts) when is_list(Opts) ->
 	gen_server:call(?MODULE, {fetch, Opts}).
 
+set_current_file(Index) ->
+	gen_server:call(?MODULE, {set_current_file, Index}).
+	
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -95,6 +98,9 @@ handle_call({fetch, Opts}, _From, State) ->
 	{ok, Results, State1} = fetch(State, Opts, proplists:get_value(max, Opts, 100)),
 	{reply, lists:reverse(Results), State1};
 		
+handle_call({set_current_file, Index}, _From, State) ->
+	{reply, ok, State#state{current_index=Index}};
+	
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 
 %%--------------------------------------------------------------------
@@ -144,8 +150,10 @@ fetch(#state{handles=Handles}=State, Opts, Max, Acc, Continuation) ->
 	%io:format("log_roller_browser:fetch(~p, ~p, ~p, ~p, ~p)~n", [State, Opts, Max, Acc, Continuation]),
 	case log_roller_disk_reader:chunk(Handles, Continuation) of
 		{ok, Handles1, Continuation1, Terms} ->
+			T_1 = now(),
 			case filter(Terms, Opts, Max, Acc) of
 				{ok, Acc1} ->
+					timer:record(filter, T_1, now()),
 					%io:format("Continuation1: ~p~n", [Continuation1]),
 					fetch(State#state{handles=Handles1}, Opts, Max, Acc1, Continuation1);
 				{error, _Reason, Acc1} ->

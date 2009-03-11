@@ -5,6 +5,7 @@
 main(_) ->
     etap:plan(5),
 	ok = error_logger:tty(false),
+	timer:start_link(),
 
 	etap_exception:lives_ok(fun() ->
 		etap_application:load_ok(log_roller_subscriber, "Application 'log_roller_subscriber' loaded"),
@@ -31,9 +32,12 @@ main(_) ->
 	ok = log_roller_disk_logger:sync(),
 	
 	etap_exception:lives_ok(fun() ->
-		io:format("~p~n", [lrb:fetch()]),
+		%io:format("~p~n", [lrb:fetch()]),
+		lrb:fetch(),
 		ok
 	end, "fetch log"),
+	
+	timer:print(),
 	
 	etap:is(rm_dir(Log_Dir), ok, "remove temp log directory"),
 

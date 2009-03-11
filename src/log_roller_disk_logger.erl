@@ -172,6 +172,12 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, total_writes=Writes
 	ok = disk_log:blog(Log, Bin),
 	{noreply, State#state{total_writes=Writes+1}};
 
+handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=Log}=State) ->
+	Infos = disk_log:info(Log),
+	Index = proplists:get_value(current_file, Infos),
+	spawn(fun() -> log_roller_browser:set_current_file(Index) end),
+	{noreply, State};
+	
 handle_info(_Info, State) -> io:format("info: ~p~n", [_Info]), {noreply, State}.
 
 %%--------------------------------------------------------------------

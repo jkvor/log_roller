@@ -29,6 +29,7 @@
 -author('jacob.vorreuter@gmail.com').
 
 -export([chunk/2]).
+-compile(export_all).
 
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
@@ -47,6 +48,7 @@ chunk(Handles, start) ->
 	
 chunk(Handles, {continuation, FileStub, Index, Pos, _SizeLimit, _MaxIndex, LTimestamp, BinRem} = Continuation) ->
 	%io:format("log_roller_disk_reader:chunk(~p, ~p)~n", [Handles, Continuation]),
+	T_1 = now(),
 	FileName = lists:flatten(io_lib:format("~s.~w", [FileStub, Index])),
 	case file_handle(FileName, Handles) of
 		{ok, Handles1, IoDevice} ->
@@ -63,6 +65,7 @@ chunk(Handles, {continuation, FileStub, Index, Pos, _SizeLimit, _MaxIndex, LTime
 									{error, read_full_cycle};
 								false ->
 									{ok, Continuation1} = rewind_location(Continuation),
+									timer:record(chunk, T_1, now()),
 									{ok, Handles1, Continuation1#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1}, Terms}
 							end;
 						{error, Reason} ->

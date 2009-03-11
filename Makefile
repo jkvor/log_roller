@@ -17,7 +17,7 @@ clean:
 docs: all
 	erl -eval 'edoc:application(log_roller, ".", [])' -s init stop -noinput
 
-install: 
+install: rel
 	mkdir -p $(prefix)/$(LIBDIR)/log_roller-$(VERSION)/{ebin,include,priv}
 	mkdir -p $(prefix)/$(ROOTDIR)/bin
 	for i in ebin/*.beam include/* priv/* ebin/*.app; do install $$i $(prefix)/$(LIBDIR)/log_roller-$(VERSION)/$$i ; done

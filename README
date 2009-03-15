@@ -113,3 +113,4 @@ OTHER DEALINGS IN THE SOFTWARE.
 * filter logs
 * cache log chunks
 * read index file instead of asking disk_log where current head is
+* get queue length of error_logger instead of using timer:sleep to wait for messages to be recv'd

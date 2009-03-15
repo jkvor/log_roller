@@ -5,7 +5,7 @@
 main(_) ->
     etap:plan(5),
 	ok = error_logger:tty(false),
-	timer:start_link(),
+	%timer:start_link(),
 
 	Bin = <<99,32,109,97,103,110,97,32,112,111,114,116,116,105,116,111,114,
 	              32,109,111,108,101,115,116,105,101,46,32,86,101,115,116,105,98,
@@ -3814,7 +3814,7 @@ main(_) ->
 	[begin
 		T_1 = now(),
 		{ok, _, _, _} = log_roller_disk_reader:parse_terms(Bin, <<>>, [], {9999,0,0}),
-		timer:record(parse_terms, T_1, now())
+		%timer:record(parse_terms, T_1, now())
 	 end || _ <- lists:seq(1,10000)],
 	
 	timer:print(),

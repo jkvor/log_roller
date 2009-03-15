@@ -6,7 +6,7 @@ main(_) ->
     etap:plan(5),
 	ok = error_logger:tty(false),
 
-	timer:start_link(),
+	%timer:start_link(),
 	
 	etap_exception:lives_ok(fun() ->
 		etap_application:load_ok(log_roller_subscriber, "Application 'log_roller_subscriber' loaded"),
@@ -35,7 +35,7 @@ main(_) ->
 	%% and then cached in the disk_log gen_server we must both wait for the disk_log to 
 	%% receive them all and then flush the disk_log cache before trying to read from disk
 	io:format("waiting for write to disk~n"),
-	timer:sleep(5000),
+	%timer:sleep(5000),
 	ok = log_roller_disk_logger:sync(),
 	
 	etap_exception:lives_ok(fun() ->
@@ -44,7 +44,7 @@ main(_) ->
 		%etap:is(length(Res), Num, "fetched correct number of results"),
 		T_1 = now(),
 		Res = lrb:fetch([{type, error}]),
-		timer:record(fetch, T_1, now()),
+		%timer:record(fetch, T_1, now()),
 		etap:is(length(Res), 1, "fetched correct number of results"),
 		io:format("result: ~p~n", [Res]),
 		ok
@@ -52,7 +52,7 @@ main(_) ->
 	
 	etap:is(rm_dir(Log_Dir), ok, "remove temp log directory"),
 	
-	timer:print([{detailed, false}]),
+	%timer:print([{detailed, false}]),
 
     etap:end_tests().
 

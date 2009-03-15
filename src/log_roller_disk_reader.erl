@@ -34,26 +34,25 @@
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
 
--record(continuation, {file_stub, index, position, size_limit, max_index, last_timestamp, bin_remainder}).
+-record(continuation, {file_stub, index, position, chunk_size, size_limit, max_index, last_timestamp, bin_remainder}).
 
 chunk(Handles, start) ->
 	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
 	%io:format("start location: ~p, ~p, ~p, ~p, ~p~n", [FileStub, Index, Pos, SizeLimit, MaxIndex]),
-	case rewind_location({continuation, FileStub, Index, Pos, SizeLimit, MaxIndex, {9999,0,0}, <<>>}) of
+	case rewind_location({continuation, FileStub, Index, Pos, ?MAX_CHUNK_SIZE, SizeLimit, MaxIndex, {9999,0,0}, <<>>}) of
 		{ok, Continuation1} ->
 			chunk(Handles, Continuation1);
 		{error, Reason} ->
 			{error, Reason}
 	end;
 	
-chunk(Handles, {continuation, FileStub, Index, Pos, _SizeLimit, _MaxIndex, LTimestamp, BinRem} = Continuation) ->
+chunk(Handles, {continuation, FileStub, Index, Pos, ChunkSize, _SizeLimit, _MaxIndex, LTimestamp, BinRem} = Continuation) ->
 	%io:format("log_roller_disk_reader:chunk(~p, ~p)~n", [Handles, Continuation]),
-	T_1 = now(),
 	FileName = lists:flatten(io_lib:format("~s.~w", [FileStub, Index])),
 	case file_handle(FileName, Handles) of
 		{ok, Handles1, IoDevice} ->
-			%io:format("pread(~p, ~p, ~p)~n", [IoDevice, Pos, ?MAX_CHUNK_SIZE]),
-			case file:pread(IoDevice, Pos, ?MAX_CHUNK_SIZE) of
+			%io:format("pread(~p, ~p, ~p)~n", [IoDevice, Pos, ChunkSize]),
+			case file:pread(IoDevice, Pos, ChunkSize) of
 				{ok, Chunk} -> 
 					BinChunk = list_to_binary(Chunk),
 					Bin = <<BinChunk/binary, BinRem/binary>>,
@@ -65,7 +64,6 @@ chunk(Handles, {continuation, FileStub, Index, Pos, _SizeLimit, _MaxIndex, LTime
 									{error, read_full_cycle};
 								false ->
 									{ok, Continuation1} = rewind_location(Continuation),
-									timer:record(chunk, T_1, now()),
 									{ok, Handles1, Continuation1#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1}, Terms}
 							end;
 						{error, Reason} ->
@@ -80,7 +78,7 @@ chunk(Handles, {continuation, FileStub, Index, Pos, _SizeLimit, _MaxIndex, LTime
 			{error, Reason}
 	end.
 		
-rewind_location({continuation, FileStub, Index, Pos, SizeLimit, MaxIndex, LTimestamp, BinRem}) ->
+rewind_location({continuation, FileStub, Index, Pos, _ChunkSize, SizeLimit, MaxIndex, LTimestamp, BinRem}) ->
 	if
 		%% file handle was left at beginning of file
 		Pos =:= 0 -> 
@@ -88,21 +86,23 @@ rewind_location({continuation, FileStub, Index, Pos, SizeLimit, MaxIndex, LTimes
 			case rewind_file_index(FileStub, Index, undefined, MaxIndex) of
 				{ok, FileSize, Index1} ->
 					%% set position <chunk size> from end of file	
-					Pos1 =
+					{Pos1,ChunkSize1} =
 						if
 							FileSize > ?MAX_CHUNK_SIZE ->
-								FileSize - ?MAX_CHUNK_SIZE;
+								P1 = ((FileSize div ?MAX_CHUNK_SIZE) * ?MAX_CHUNK_SIZE),
+								{P1, (FileSize - P1)};
 							true ->
-								0
+								{0, ?MAX_CHUNK_SIZE}
 						end,
-					{ok, {continuation, FileStub, Index1, Pos1, SizeLimit, MaxIndex, LTimestamp, BinRem}};
+					{ok, {continuation, FileStub, Index1, Pos1, ChunkSize1, SizeLimit, MaxIndex, LTimestamp, BinRem}};
 				{error, Reason} ->
 					{error, Reason}
 			end;
 		Pos =< ?MAX_CHUNK_SIZE -> %% less than one chunk left
-			{ok, {continuation, FileStub, Index, 0, SizeLimit, MaxIndex, LTimestamp, BinRem}};
+			{ok, {continuation, FileStub, Index, 0, ?MAX_CHUNK_SIZE, SizeLimit, MaxIndex, LTimestamp, BinRem}};
 		true -> %% more than a chunk's worth left
-			{ok, {continuation, FileStub, Index, Pos - ?MAX_CHUNK_SIZE, SizeLimit, MaxIndex, LTimestamp, BinRem}}
+			Pos1 = (((Pos - ?MAX_CHUNK_SIZE) div ?MAX_CHUNK_SIZE) * ?MAX_CHUNK_SIZE),
+			{ok, {continuation, FileStub, Index, Pos1, (Pos-Pos1), SizeLimit, MaxIndex, LTimestamp, BinRem}}
 	end.	
 
 %% if Index and StartingIndex match then we've cycled all the way around
@@ -176,6 +176,8 @@ parse_terms(<<A:8, Rest/binary>>, Rem, Acc, LTimestamp) ->
 	
 full_cycle({A1,B1,C1}, {A2,B2,C2}) ->
 	if 
-		A1 >= A2, B1 >= B2, C1 >= C2 -> true;
+		A1 =:= A2, B1 =:= B2, C1 >= C2 -> true;
+		A1 =:= A2, B1 > B2 -> true;
+		A1 > A2 -> true;
 		true -> false
 	end.

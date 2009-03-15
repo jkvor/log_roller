@@ -64,7 +64,7 @@ fetch() -> fetch([]).
 %%		 Result = list(list(Time::string(), Type::atom(), Node::string(), Message::string()))
 %% @doc fetch a list of log entries
 fetch(Opts) when is_list(Opts) ->
-	gen_server:call(?MODULE, {fetch, Opts}).
+	gen_server:call(?MODULE, {fetch, Opts}, infinity).
 
 set_current_file(Index) ->
 	gen_server:call(?MODULE, {set_current_file, Index}).
@@ -144,29 +144,30 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 fetch(State, Opts, Max) -> fetch(State, Opts, Max, [], start).
 
-fetch(State, _Opts, Max, Acc, _Continuation) when length(Acc) >= Max -> {ok, Acc, State};
+fetch(State, _Opts, Max, Acc, _Continuation) when is_integer(Max), length(Acc) >= Max -> {ok, Acc, State};
 
 fetch(#state{handles=Handles}=State, Opts, Max, Acc, Continuation) ->
+	%io:format("~p~n", [Continuation]),
 	%io:format("log_roller_browser:fetch(~p, ~p, ~p, ~p, ~p)~n", [State, Opts, Max, Acc, Continuation]),
 	case log_roller_disk_reader:chunk(Handles, Continuation) of
 		{ok, Handles1, Continuation1, Terms} ->
-			T_1 = now(),
+			%io:format("num terms: ~w~n", [length(Terms)]),
+			%io:format("terms: ~p~n", [Terms]),
 			case filter(Terms, Opts, Max, Acc) of
 				{ok, Acc1} ->
-					timer:record(filter, T_1, now()),
 					%io:format("Continuation1: ~p~n", [Continuation1]),
 					fetch(State#state{handles=Handles1}, Opts, Max, Acc1, Continuation1);
 				{error, _Reason, Acc1} ->
 					{ok, Acc1, State#state{handles=Handles1}}
 			end;
 		{error, _Reason} ->
-			%io:format("~p~n", [{error, Reason}]),
+			%io:format("~p~n", [{error, _Reason}]),
 			{ok, Acc, State}
 	end.
 	
 filter([], _Opts, _Max, Acc) -> {ok, Acc};
 
-filter(_Results, _Opts, Max, Acc) when length(Acc) >= Max -> {ok, Acc};
+filter(_Results, _Opts, Max, Acc) when is_integer(Max), length(Acc) >= Max -> {ok, Acc};
 
 filter([{log_entry, Time, Type, Node, Msg}|Tail], Opts, Max, Acc) ->
 	%io:format("filter ~p~n", [{log_entry, Time, Type, Node, Msg}]),

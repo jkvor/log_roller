@@ -58,7 +58,7 @@ reload() ->
 %% @spec sync() -> ok | {error, Reason}
 %% @doc call disk_log:sync() and force flush of cache
 sync() ->
-	gen_server:call(?MODULE, sync).
+	gen_server:call(?MODULE, sync, infinity).
 	
 %% @spec subscribe_to(Node) -> ok
 %%		 Node = list() | node()

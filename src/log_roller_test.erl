@@ -24,7 +24,7 @@
 -module(log_roller_test).
 -compile(export_all).
 
-setup_test() ->
+setup_test(MaxBytes, MaxFiles) ->
 	ok = error_logger:tty(false),
 	
 	etap_exception:lives_ok(fun() ->
@@ -37,8 +37,8 @@ setup_test() ->
 	put(log_dir, Log_Dir),
 	
 	application:set_env(log_roller_subscriber, log_dir, Log_Dir),
-	application:set_env(log_roller_subscriber, maxbytes, 10485760),
-	application:set_env(log_roller_subscriber, maxfiles, 10),
+	application:set_env(log_roller_subscriber, maxbytes, MaxBytes),
+	application:set_env(log_roller_subscriber, maxfiles, MaxFiles),
 	
 	etap_exception:lives_ok(fun() ->
 		etap_application:start_ok(log_roller_subscriber, "Application 'log_roller_subscriber' started"),

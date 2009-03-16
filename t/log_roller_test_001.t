@@ -3,12 +3,13 @@
 %%! -pa ebin -noshell
 
 %% =============================================================================
-%% * Test a large log set that does not overlap on itself
+%% * Test a large log set that wraps, but does not overlap on itself
 %% * Test fetching correct number of logs with {max, none} and {max, Num}
 %% =============================================================================
 main(_) ->
     etap:plan(5),
-	ok = log_roller_test:setup_test(),
+	ok = log_roller_test:setup_test(10485760, 10),
+	%stop_watch:start_link(),
 	
 	%% log an error that will differ in type from the info messages below
 	error_logger:error_msg("Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy"),
@@ -35,5 +36,7 @@ main(_) ->
 	end, "fetch log"),
 	
 	ok = log_roller_test:teardown_test(),
+	
+	%stop_watch:print(),
 	
     etap:end_tests().

@@ -82,7 +82,7 @@ set_current_file(Index) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init(_) ->
-	{ok, #state{handles=dict:new()}}.
+	{ok, #state{handles=dict:new(), cache=dict:new()}}.
 
 %%--------------------------------------------------------------------
 %% Function: handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -95,11 +95,16 @@ init(_) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_call({fetch, Opts}, _From, State) ->
-	{ok, Results, State1} = fetch(State, Opts, proplists:get_value(max, Opts, 100)),
-	{reply, lists:reverse(Results), State1};
+	case fetch(State, Opts, proplists:get_value(max, Opts, 100)) of
+		{ok, Results, State1} ->
+			{reply, lists:reverse(Results), State1};
+		Err ->
+			{reply, Err, State}
+	end;
 		
 handle_call({set_current_file, Index}, _From, State) ->
-	{reply, ok, State#state{current_index=Index}};
+	{ok, Handles, Cache} = log_roller_disk_reader:refresh_cache(State#state.handles, State#state.cache, Index),
+	{reply, ok, State#state{handles=Handles, cache=Cache, current_index=Index}};
 	
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 
@@ -142,27 +147,32 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%% Internal functions
 %%--------------------------------------------------------------------
 
-fetch(State, Opts, Max) -> fetch(State, Opts, Max, [], start).
+fetch(State, Opts, Max) -> 
+	case log_roller_disk_reader:start_continuation() of
+		{ok, Cont} -> fetch(State, Opts, Max, [], Cont);
+		Err -> Err
+	end.
 
 fetch(State, _Opts, Max, Acc, _Continuation) when is_integer(Max), length(Acc) >= Max -> {ok, Acc, State};
 
-fetch(#state{handles=Handles}=State, Opts, Max, Acc, Continuation) ->
+fetch(#state{handles=Handles, cache=Cache}=State, Opts, Max, Acc, Continuation) ->
 	%io:format("~p~n", [Continuation]),
 	%io:format("log_roller_browser:fetch(~p, ~p, ~p, ~p, ~p)~n", [State, Opts, Max, Acc, Continuation]),
-	case log_roller_disk_reader:chunk(Handles, Continuation) of
-		{ok, Handles1, Continuation1, Terms} ->
+	case log_roller_disk_reader:terms(Handles, Cache, Continuation) of
+		{ok, Handles1, Cache1, Continuation1, Terms} ->
 			%io:format("num terms: ~w~n", [length(Terms)]),
 			%io:format("terms: ~p~n", [Terms]),
 			case filter(Terms, Opts, Max, Acc) of
 				{ok, Acc1} ->
 					%io:format("Continuation1: ~p~n", [Continuation1]),
-					fetch(State#state{handles=Handles1}, Opts, Max, Acc1, Continuation1);
+					fetch(State#state{handles=Handles1, cache=Cache1}, Opts, Max, Acc1, Continuation1);
 				{error, _Reason, Acc1} ->
-					{ok, Acc1, State#state{handles=Handles1}}
+					{ok, Acc1, State#state{handles=Handles1, cache=Cache1}}
 			end;
-		{error, _Reason} ->
-			%io:format("~p~n", [{error, _Reason}]),
-			{ok, Acc, State}
+		{error, read_full_cycle} ->
+			{ok, Acc, State};
+		{error, Reason} ->
+			{error, Reason}
 	end.
 	
 filter([], _Opts, _Max, Acc) -> {ok, Acc};

@@ -28,47 +28,83 @@
 -module(log_roller_disk_reader).
 -author('jacob.vorreuter@gmail.com').
 
--export([chunk/2]).
 -compile(export_all).
 
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
 
 -record(continuation, {file_stub, index, position, chunk_size, size_limit, max_index, last_timestamp, bin_remainder}).
-
-chunk(Handles, start) ->
-	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
-	%io:format("start location: ~p, ~p, ~p, ~p, ~p~n", [FileStub, Index, Pos, SizeLimit, MaxIndex]),
-	case rewind_location({continuation, FileStub, Index, Pos, ?MAX_CHUNK_SIZE, SizeLimit, MaxIndex, {9999,0,0}, <<>>}) of
-		{ok, Continuation1} ->
-			chunk(Handles, Continuation1);
+	
+terms(Handles, Cache, Cont) ->
+	case read_chunk(Handles, Cache, Cont) of
+		{ok, Handles1, Cache1, Cont1, Terms} ->
+			case full_cycle(Cont1#continuation.last_timestamp, Cont#continuation.last_timestamp) of
+				true ->
+					{error, read_full_cycle};
+				false ->
+					{ok, Cont2} = rewind_location(Cont1),
+					{ok, Handles1, Cache1, Cont2, Terms}
+			end;
+		{error, Reason} ->
+			{error, Reason}
+	end.
+	
+refresh_cache(Handles, Cache, Index) ->
+	Cont = start_continuation(),
+	refresh_cache(Handles, Cache, Index, Cont#continuation{index=Index, position=Cont#continuation.size_limit}).
+	
+refresh_cache(Handles, Cache, Index, #continuation{index=Index, position=Pos}=Cont) ->
+	case read_file(Handles, Cont) of
+		{ok, Handles1, Chunk} ->
+			Bin = list_to_binary(Chunk),
+			case parse_terms(Bin, <<>>, [], {9999,0,0}) of
+				{ok, Terms, BinRem1, LTimestamp1} ->
+					Cont1 = Cont#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1},
+					Cache1 = dict:store({Index, Pos}, {Cont1, Terms}, Cache),
+					{ok, Handles1, Cache1};
+				{error, Reason} ->
+					{error, Reason}
+			end;
 		{error, Reason} ->
 			{error, Reason}
 	end;
 	
-chunk(Handles, {continuation, FileStub, Index, Pos, ChunkSize, _SizeLimit, _MaxIndex, LTimestamp, BinRem} = Continuation) ->
-	%io:format("log_roller_disk_reader:chunk(~p, ~p)~n", [Handles, Continuation]),
+refresh_cache(Handles, Cache, _, _) ->
+	{ok, Handles, Cache}.
+	
+read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Cont) ->
+	case dict:find({Index, Pos}, Cache) of
+		error ->
+			%io:format("cache miss: {~w, ~w}~n", [Index, Pos]),
+			case read_file(Handles, Cont) of
+				{ok, Handles1, Chunk} ->
+					BinChunk = list_to_binary(Chunk),
+					Bin = <<BinChunk/binary, BinRem/binary>>,
+					case parse_terms(Bin, <<>>, [], {9999,0,0}) of
+						{ok, Terms, BinRem1, LTimestamp1} ->
+							Cont1 = Cont#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1},
+							Cache1 = dict:store({Index, Pos}, {Cont1, Terms}, Cache),
+							{ok, Handles1, Cache1, Cont1, Terms};
+						{error, Reason} ->
+							{error, Reason}
+					end;
+				{error, Reason} ->
+					{error, Reason}
+			end;
+		{ok, {Cont1, Terms}} ->
+			LTimestamp1 = Cont1#continuation.last_timestamp,
+			BinRem1 = Cont1#continuation.bin_remainder,
+			{ok, Handles, Cache, Cont#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1}, Terms}
+	end.
+	
+read_file(Handles, {continuation, FileStub, Index, Pos, ChunkSize, _, _, _, _}) ->
 	FileName = lists:flatten(io_lib:format("~s.~w", [FileStub, Index])),
 	case file_handle(FileName, Handles) of
 		{ok, Handles1, IoDevice} ->
 			%io:format("pread(~p, ~p, ~p)~n", [IoDevice, Pos, ChunkSize]),
 			case file:pread(IoDevice, Pos, ChunkSize) of
 				{ok, Chunk} -> 
-					BinChunk = list_to_binary(Chunk),
-					Bin = <<BinChunk/binary, BinRem/binary>>,
-					%io:format("chunk: ~p~n", [Bin]),
-					case parse_terms(Bin, <<>>, [], {9999,0,0}) of
-						{ok, Terms, BinRem1, LTimestamp1} ->
-							case full_cycle(LTimestamp1, LTimestamp) of
-								true ->
-									{error, read_full_cycle};
-								false ->
-									{ok, Continuation1} = rewind_location(Continuation),
-									{ok, Handles1, Continuation1#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1}, Terms}
-							end;
-						{error, Reason} ->
-							{error, Reason}
-					end;
+					{ok, Handles1, Chunk};
 				eof ->
 					{error, eof};
 				{error, Reason} -> 
@@ -77,6 +113,11 @@ chunk(Handles, {continuation, FileStub, Index, Pos, ChunkSize, _SizeLimit, _MaxI
 		{error, Reason} ->
 			{error, Reason}
 	end.
+	
+%% @spec start_continuation() -> {ok, continuation()} | {error, string()}
+start_continuation() ->
+	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
+	rewind_location({continuation, FileStub, Index, Pos, ?MAX_CHUNK_SIZE, SizeLimit, MaxIndex, {9999,0,0}, <<>>}).
 		
 rewind_location({continuation, FileStub, Index, Pos, _ChunkSize, SizeLimit, MaxIndex, LTimestamp, BinRem}) ->
 	if
@@ -173,7 +214,7 @@ parse_terms(<<>>, Rem, Acc, LTimestamp) ->
 parse_terms(<<A:8, Rest/binary>>, Rem, Acc, LTimestamp) ->
 	%io:format("parse terms ~p, ~p~n", [A, Rest]),
 	parse_terms(Rest, <<Rem/binary, A>>, Acc, LTimestamp).
-	
+		
 full_cycle({A1,B1,C1}, {A2,B2,C2}) ->
 	if 
 		A1 =:= A2, B1 =:= B2, C1 >= C2 -> true;

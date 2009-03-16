@@ -7,8 +7,8 @@
 %% * Test fetching correct number of logs with {max, none} and {max, Num}
 %% =============================================================================
 main(_) ->
-    etap:plan(5),
-	ok = log_roller_test:setup_test(10485760, 10),
+    etap:plan(11),
+	ok = log_roller_test:setup_test(9000000, 10),
 	%stop_watch:start_link(),
 	
 	%% log an error that will differ in type from the info messages below

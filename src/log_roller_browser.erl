@@ -103,8 +103,13 @@ handle_call({fetch, Opts}, _From, State) ->
 	end;
 		
 handle_call({set_current_file, Index}, _From, State) ->
-	{ok, Handles, Cache} = log_roller_disk_reader:refresh_cache(State#state.handles, State#state.cache, Index),
-	{reply, ok, State#state{handles=Handles, cache=Cache, current_index=Index}};
+	case log_roller_disk_reader:refresh_cache(State#state.cache, Index) of
+		{ok, Cache} ->
+			{reply, ok, State#state{cache=Cache, current_index=Index}};
+		Err ->
+			io:format("refresh cache error: ~p~n", [Err]),
+			{reply, Err, State}
+	end;
 	
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 

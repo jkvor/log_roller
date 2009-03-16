@@ -34,6 +34,7 @@
 -include("log_roller.hrl").
 
 -record(continuation, {file_stub, index, position, chunk_size, size_limit, max_index, last_timestamp, bin_remainder}).
+-record(cache_entry, {dirty, continuation, terms}).
 	
 terms(Handles, Cache, Cont) ->
 	case read_chunk(Handles, Cache, Cont) of
@@ -49,32 +50,40 @@ terms(Handles, Cache, Cont) ->
 			{error, Reason}
 	end.
 	
-refresh_cache(Handles, Cache, Index) ->
-	Cont = start_continuation(),
-	refresh_cache(Handles, Cache, Index, Cont#continuation{index=Index, position=Cont#continuation.size_limit}).
+refresh_cache(Cache, Index0) ->
+	Opts = log_roller_disk_logger:options(),
+	{SizeLimit, MaxIndex} = proplists:get_value(size, Opts),
+	Index =
+		if
+			Index0 =< 1 -> %% base index, cycle to top index
+				MaxIndex;
+			true ->
+				Index0 - 1
+		end,
+	Pos = snap_to_grid(SizeLimit),
+	refresh_cache(Cache, Index, Pos).
 	
-refresh_cache(Handles, Cache, Index, #continuation{index=Index, position=Pos}=Cont) ->
-	case read_file(Handles, Cont) of
-		{ok, Handles1, Chunk} ->
-			Bin = list_to_binary(Chunk),
-			case parse_terms(Bin, <<>>, [], {9999,0,0}) of
-				{ok, Terms, BinRem1, LTimestamp1} ->
-					Cont1 = Cont#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1},
-					Cache1 = dict:store({Index, Pos}, {Cont1, Terms}, Cache),
-					{ok, Handles1, Cache1};
-				{error, Reason} ->
-					{error, Reason}
-			end;
-		{error, Reason} ->
-			{error, Reason}
-	end;
+refresh_cache(Cache, Index, Pos) when Pos > 0 ->
+	Cache1 =
+		case dict:find({Index, Pos}, Cache) of
+			error -> Cache;
+			{ok, CacheEntry} ->
+				dict:store({Index, Pos}, CacheEntry#cache_entry{dirty=true}, Cache)
+		end,
+	refresh_cache(Cache1, Index, Pos-?MAX_CHUNK_SIZE);
 	
-refresh_cache(Handles, Cache, _, _) ->
-	{ok, Handles, Cache}.
-	
+refresh_cache(Cache, _, _) ->
+	{ok, Cache}.
+
 read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Cont) ->
-	case dict:find({Index, Pos}, Cache) of
-		error ->
+	Dirty =
+		case dict:find({Index, Pos}, Cache) of
+			error -> true;
+			{ok, {cache_entry, true, _, _}} -> true;
+			{ok, CacheEntry} -> CacheEntry
+		end,
+	case Dirty of
+		true ->
 			%io:format("cache miss: {~w, ~w}~n", [Index, Pos]),
 			case read_file(Handles, Cont) of
 				{ok, Handles1, Chunk} ->
@@ -83,7 +92,7 @@ read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Con
 					case parse_terms(Bin, <<>>, [], {9999,0,0}) of
 						{ok, Terms, BinRem1, LTimestamp1} ->
 							Cont1 = Cont#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1},
-							Cache1 = dict:store({Index, Pos}, {Cont1, Terms}, Cache),
+							Cache1 = dict:store({Index, Pos}, {cache_entry, false, Cont1, Terms}, Cache),
 							{ok, Handles1, Cache1, Cont1, Terms};
 						{error, Reason} ->
 							{error, Reason}
@@ -91,7 +100,7 @@ read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Con
 				{error, Reason} ->
 					{error, Reason}
 			end;
-		{ok, {Cont1, Terms}} ->
+		{cache_entry, _, Cont1, Terms} ->
 			LTimestamp1 = Cont1#continuation.last_timestamp,
 			BinRem1 = Cont1#continuation.bin_remainder,
 			{ok, Handles, Cache, Cont#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1}, Terms}
@@ -130,7 +139,7 @@ rewind_location({continuation, FileStub, Index, Pos, _ChunkSize, SizeLimit, MaxI
 					{Pos1,ChunkSize1} =
 						if
 							FileSize > ?MAX_CHUNK_SIZE ->
-								P1 = ((FileSize div ?MAX_CHUNK_SIZE) * ?MAX_CHUNK_SIZE),
+								P1 = snap_to_grid(FileSize),
 								{P1, (FileSize - P1)};
 							true ->
 								{0, ?MAX_CHUNK_SIZE}
@@ -142,7 +151,7 @@ rewind_location({continuation, FileStub, Index, Pos, _ChunkSize, SizeLimit, MaxI
 		Pos =< ?MAX_CHUNK_SIZE -> %% less than one chunk left
 			{ok, {continuation, FileStub, Index, 0, ?MAX_CHUNK_SIZE, SizeLimit, MaxIndex, LTimestamp, BinRem}};
 		true -> %% more than a chunk's worth left
-			Pos1 = (((Pos - ?MAX_CHUNK_SIZE) div ?MAX_CHUNK_SIZE) * ?MAX_CHUNK_SIZE),
+			Pos1 = snap_to_grid(Pos - ?MAX_CHUNK_SIZE),
 			{ok, {continuation, FileStub, Index, Pos1, (Pos-Pos1), SizeLimit, MaxIndex, LTimestamp, BinRem}}
 	end.	
 
@@ -215,6 +224,9 @@ parse_terms(<<A:8, Rest/binary>>, Rem, Acc, LTimestamp) ->
 	%io:format("parse terms ~p, ~p~n", [A, Rest]),
 	parse_terms(Rest, <<Rem/binary, A>>, Acc, LTimestamp).
 		
+snap_to_grid(Position) ->
+	((Position div ?MAX_CHUNK_SIZE) * ?MAX_CHUNK_SIZE).
+	
 full_cycle({A1,B1,C1}, {A2,B2,C2}) ->
 	if 
 		A1 =:= A2, B1 =:= B2, C1 >= C2 -> true;

@@ -33,7 +33,7 @@
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([reload/0, sync/0, subscribe_to/1, ping/0, total_writes/0, current_location/0]).
+-export([reload/0, sync/0, subscribe_to/1, ping/0, total_writes/0, current_location/0, options/0]).
 
 -include("log_roller.hrl").
 
@@ -95,6 +95,9 @@ total_writes() ->
 current_location() ->
 	gen_server:call(?MODULE, current_location).
 	
+options() ->
+	gen_server:call(?MODULE, options).
+	
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -145,6 +148,9 @@ handle_call(current_location, _From, #state{log=Log, args=Args}=State) ->
 	Pos = proplists:get_value(no_current_bytes, Infos),
 	{SizeLimit, MaxIndex} = proplists:get_value(size, Args),
 	{reply, {FileStub, Index, Pos, SizeLimit, MaxIndex}, State};
+	
+handle_call(options, _From, #state{args=Args}=State) ->
+	{reply, Args, State};
 		
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 

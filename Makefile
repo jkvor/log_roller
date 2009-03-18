@@ -42,7 +42,7 @@ rel: templates
 	erl -pa ebin -eval 'log_roller_subscriber:build_rel()' -s init stop -noshell
 
 test: all
-	prove -v t/*.t
+	prove t/*.t
 
 ./%.beam: %.erl
 	@mkdir -p ebin

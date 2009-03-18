@@ -6,8 +6,8 @@
 %% * Test a wrapping and overwriting log
 %% =============================================================================
 main(_) ->
-    etap:plan(11),
-	ok = log_roller_test:setup_test(200000, 5),
+    etap:plan(12),
+	ok = log_roller_test:setup_test(250000, 5),
 	%stop_watch:start_link(),
 	
 	Num = 1000,
@@ -40,10 +40,7 @@ main(_) ->
 	
 	io:format("fetching~n"),
 	etap_exception:lives_ok(fun() ->
-		Res = lrb:fetch([{max, Num}]),
-		io:format("terms: ~p~n", [Res]),
-		etap:is(length(Res), Num, "fetched correct number of results"),
-		%etap:is(length(lrb:fetch([{max, Num}])), Num, "fetched correct number of results"),
+		etap:is(length(lrb:fetch([{max, Num}])), Num, "fetched correct number of results"),
 		ok
 	end, "fetch log"),
 	

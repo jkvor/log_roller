@@ -50,34 +50,27 @@ terms(Handles, Cache, Cont) ->
 			{error, Reason}
 	end.
 	
-refresh_cache(Cache, Index0) ->
+invalidate_cache(Cache, Index) ->
 	Opts = log_roller_disk_logger:options(),
-	{SizeLimit, MaxIndex} = proplists:get_value(size, Opts),
-	Index =
-		if
-			Index0 =< 1 -> %% base index, cycle to top index
-				MaxIndex;
-			true ->
-				Index0 - 1
-		end,
+	{SizeLimit, _} = proplists:get_value(size, Opts),
 	Pos = snap_to_grid(SizeLimit),
-	refresh_cache(Cache, Index, Pos).
+	invalidate_cache(Cache, Index, Pos).
 	
-refresh_cache(Cache, Index, Pos) when Pos >= 0 ->
+invalidate_cache(Cache, Index, Pos) when Pos >= 0 ->
 	Cache1 =
 		case dict:find({Index, Pos}, Cache) of
 			error -> Cache;
 			{ok, CacheEntry} ->
-				io:format("invalidate cache {~w, ~w}~n", [Index, Pos]),
+				%io:format("invalidate cache {~w, ~w}~n", [Index, Pos]),
 				dict:store({Index, Pos}, CacheEntry#cache_entry{dirty=true}, Cache)
 		end,
-	refresh_cache(Cache1, Index, Pos-?MAX_CHUNK_SIZE);
+	invalidate_cache(Cache1, Index, Pos-?MAX_CHUNK_SIZE);
 	
-refresh_cache(Cache, _, _) ->
+invalidate_cache(Cache, _, _) ->
 	{ok, Cache}.
 
 read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Cont) ->
-	io:format("read {~w, ~w}~n", [Index, Pos]),
+	%io:format("read {~w, ~w}~n", [Index, Pos]),
 	Dirty =
 		case dict:find({Index, Pos}, Cache) of
 			error -> true;
@@ -86,7 +79,7 @@ read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Con
 		end,
 	case Dirty of
 		true ->
-			io:format("cache miss: {~w, ~w}~n", [Index, Pos]),
+			%io:format("cache miss: {~w, ~w}~n", [Index, Pos]),
 			case read_file(Handles, Cont) of
 				{ok, Handles1, Chunk} ->
 					BinChunk = list_to_binary(Chunk),

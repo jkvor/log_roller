@@ -39,6 +39,8 @@
 
 -record(state, {log, args, total_writes}).
 
+-define(DEFAULT_MAXBYTES, 10485760).
+-define(DEFAULT_MAXFILES, 10).
 -define(LOG_NAME, log_roller_data).
 
 %%====================================================================
@@ -175,7 +177,7 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, total_writes=Writes
 	LogSize = size(BinLog),
 	Bin = <<?Bin_Term_Start/binary, LogSize:16, BinLog:LogSize/binary, ?Bin_Term_Stop/binary>>,
 	%io:format("log for ~p: ~p~n", [Log, Bin]),
-	ok = disk_log:blog(Log, Bin),
+	disk_log:blog(Log, Bin),
 	{noreply, State#state{total_writes=Writes+1}};
 
 handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=Log}=State) ->
@@ -231,12 +233,12 @@ initialize_state() ->
 	LogFile = log_file(),
 	Maxbytes = 
 		case application:get_env(log_roller_subscriber, maxbytes) of
-			undefined -> 10485760;
+			undefined -> ?DEFAULT_MAXBYTES;
 			{ok, Val1} -> Val1
 		end,
 	Maxfiles = 
 		case application:get_env(log_roller_subscriber, maxfiles) of
-			undefined -> 10;
+			undefined -> ?DEFAULT_MAXFILES;
 			{ok, Val2} -> Val2
 		end,
 	Args = [

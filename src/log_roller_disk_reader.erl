@@ -21,10 +21,6 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 %%
-%% @doc Browse log files collected by a log_roller subscriber node.
-%% log_roller_browser is a gen_server that is started by the log_roller 
-%% application when the "-log_roller_type subscriber" argument is given 
-%% in the shell.
 -module(log_roller_disk_reader).
 -author('jacob.vorreuter@gmail.com').
 

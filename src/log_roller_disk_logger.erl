@@ -21,9 +21,6 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 %%
-%% @doc The subscriber receives log messages broadcast from publisher nodes.
-%% log_roller_disk_logger is a gen_server that maintains a file handle
-%% for the disk_log that it writes to.
 -module(log_roller_disk_logger).
 -author('jacob.vorreuter@gmail.com').
 -behaviour(gen_server).

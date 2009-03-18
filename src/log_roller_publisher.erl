@@ -54,7 +54,7 @@ start_phase(world, _, _) ->
 start_phase(discovery, _, _) ->
 	[register_subscriber(Node) || Node <- [node()|nodes()]],
 	ok.
-	
+
 %% @spec register_subscriber(Node::node()) -> ok
 %% @doc ping Node to determine if it is a subscriber and register with event handler if it is
 register_subscriber(Node) ->

@@ -1,4 +1,6 @@
 {application,log_roller}.
 {packages,[]}.
-{modules,[erltl,log_roller,log_roller_browser,log_roller_h,
-          log_roller_subscriber,lr_webtool,rb_raw]}.
+{modules,[erltl,log_roller_browser,log_roller_disk_logger,
+          log_roller_disk_reader,log_roller_h,log_roller_publisher,
+          log_roller_subscriber,log_roller_test,log_roller_webtool,lrb,
+          rb_raw]}.

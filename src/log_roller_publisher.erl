@@ -83,11 +83,11 @@ build_rel() ->
 	    Ra
 	end || {D, P} <- Patterns],
 	RelInfo = {release,
-	    {"log_roller_publisher", "0.0.1"},
+	    {"log_roller_publisher", "0.2"},
 	    {erts, Erts}, [
 	        {kernel, Kerne},
 	        {stdlib, Stdl},
-	        {log_roller_publisher, "0.0.1"}
+	        {log_roller_publisher, "0.2"}
 	    ]
 	},
 	io:format(FD, "~p.", [RelInfo]),

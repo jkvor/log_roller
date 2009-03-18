@@ -21,7 +21,6 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 %%
-%% @equiv log_roller_browser
 -module(lrb).
 
 -export([fetch/0, fetch/1]).

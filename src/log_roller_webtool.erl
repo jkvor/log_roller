@@ -73,6 +73,6 @@ display(QS) ->
 			Content = lr_logs:render({data, ?TOOL_BASE_URL, List}),
 			lr_frame:render({data, ?TOOL_BASE_URL, [Header, Content]});
 		Err ->
-			io:format("fetch erer: ~p~n", [Err]),
+			io:format("fetch error: ~p~n", [Err]),
 			Err
 	end.

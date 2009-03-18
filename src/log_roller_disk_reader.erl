@@ -186,10 +186,11 @@ file_handle(FileName, Handles) ->
 			end
 	end.
 
-%% @spec parse_terms(Bin, Rem, Acc) -> Result
+%% @spec parse_terms(Bin, Rem, Acc, LTimestamp) -> Result
 %%		 Bin = binary()
 %%		 Rem = binary()
 %%		 Acc = list()
+%%		 LTimestamp = tuple()
 %%		 Result = {ok, Terms, Rem}
 parse_terms(<<16#FF:8, 16#FF:8, 16#FF:8, 16#FF:8, LogSize:16/integer, Rest/binary>> = Bin, Rem, Acc, LTimestamp) ->
 	%io:format("parse terms: ~p~n", [LogSize]),

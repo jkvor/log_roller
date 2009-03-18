@@ -1,4 +1,4 @@
-VERSION=0.0.1
+VERSION=0.2
 LIBDIR=`erl -eval 'io:format("~s~n", [code:lib_dir()])' -s init stop -noshell`
 ROOTDIR=`erl -eval 'io:format("~s~n", [code:root_dir()])' -s init stop -noshell`
 SASL_DIR=`erl -eval 'io:format("~s~n", [code:lib_dir("sasl")])' -s init stop -noshell`
@@ -32,7 +32,7 @@ uninstall:
 	rm /etc/init.d/log_roller*
 
 package: clean
-	@mkdir log_roller-$(VERSION)/ && cp -rf ebin include log_roller_subscriber Makefile priv README src t templates log_roller-$(VERSION)
+	@mkdir log_roller-$(VERSION)/ && cp -rf include log_roller_subscriber Makefile priv README src t templates log_roller-$(VERSION)
 	@COPYFILE_DISABLE=true tar zcf log_roller-$(VERSION).tgz log_roller-$(VERSION)
 	@rm -rf log_roller-$(VERSION)/
 

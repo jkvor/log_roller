@@ -1,6 +1,6 @@
 {application, log_roller_subscriber, [
     {description, "log_roller_subscriber"},
-    {vsn, "0.0.1"},
+    {vsn, "0.2"},
     {modules, [
         log_roller_subscriber,
 		log_roller_disk_logger,

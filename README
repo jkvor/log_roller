@@ -26,7 +26,7 @@ application:
 
 {application, my_app, [
     {description, "my_app"},
-    {vsn, "0.0.1"},
+    {vsn, "0.2"},
     {modules, []},
     {registered, []},
     {mod, {my_app, []}},

@@ -251,9 +251,11 @@ initialize_state() ->
 	#state{log=Log, args=Args1, total_writes=0}.
 	
 open_log(Args) ->
-	case disk_log:open(Args) of
+	Res = disk_log:open(Args),
+	io:format("opened log: ~p~n", [Res]),
+	case Res of
 		{ok, Log} ->
-			%io:format("open log ~p for ~p~n", [Log, Args]),
+			io:format("info: ~p~n", [disk_log:info(Log)]),
 			{ok, Log, Args};
 		{repaired, Log, {recovered, _Rec}, {badbytes, _Bad}} ->
 			{ok, Log, Args};

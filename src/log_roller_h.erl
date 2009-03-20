@@ -58,39 +58,39 @@ init(_) ->
 %% @hidden                       
 %%----------------------------------------------------------------------
 handle_event({error, _Gleader, {Pid, Format, Data}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=error, node=atom_to_list(node(Pid)), time=erlang:now(), message=msg(Format, Data)}),
+	{ok, State1} = commit(State, #log_entry{type=error, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=msg(Format, Data)}),
 	{ok, State1};
 	
 handle_event({error_report, _Gleader, {Pid, std_error, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=error, node=atom_to_list(node(Pid)), time=erlang:now(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=error, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 	
 handle_event({error_report, _Gleader, {Pid, Type, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(node(Pid)), time=erlang:now(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 	
 handle_event({warning_msg, _Gleader, {Pid, Format, Data}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=warning, node=atom_to_list(node(Pid)), time=erlang:now(), message=msg(Format, Data)}),
+	{ok, State1} = commit(State, #log_entry{type=warning, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=msg(Format, Data)}),
 	{ok, State1};
 		
 handle_event({warning_report, _Gleader, {Pid, std_warning, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=warning, node=atom_to_list(node(Pid)), time=erlang:now(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=warning, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 		
 handle_event({warning_report, _Gleader, {Pid, Type, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(node(Pid)), time=erlang:now(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 		
 handle_event({info_msg, _Gleader, {Pid, Format, Data}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=info, node=atom_to_list(node(Pid)), time=erlang:now(), message=msg(Format, Data)}),
+	{ok, State1} = commit(State, #log_entry{type=info, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=msg(Format, Data)}),
 	{ok, State1};
 		
 handle_event({info_report, _Gleader, {Pid, std_info, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=info, node=atom_to_list(node(Pid)), time=erlang:now(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=info, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 		
 handle_event({info_report, _Gleader, {Pid, Type, Report}}, State) ->
-	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(node(Pid)), time=erlang:now(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 
 handle_event(_, State) ->
@@ -148,6 +148,12 @@ code_change(_OldVsn, State, _Extra) ->
 %%%----------------------------------------------------------------------
 %%% Internal functions
 %%%----------------------------------------------------------------------
+get_node(emulator) -> emulator;
+get_node(Other) -> 
+	case (catch node(Other)) of
+		{'EXIT',_} -> undefined;
+		Node -> Node
+	end.
 	
 commit(State, Log) ->
 	ok = broadcast(Log, State#state.listening_pids),

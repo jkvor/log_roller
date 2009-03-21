@@ -57,39 +57,39 @@ init(_) ->
 %%          remove_handler       
 %% @hidden                       
 %%----------------------------------------------------------------------
-handle_event({error, _Gleader, {Pid, Format, Data}}, State) ->
+handle_event({error, _Gleader, {Pid, Format, Data}}, State) when is_pid(Pid) ->
 	{ok, State1} = commit(State, #log_entry{type=error, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=msg(Format, Data)}),
 	{ok, State1};
 	
-handle_event({error_report, _Gleader, {Pid, std_error, Report}}, State) ->
+handle_event({error_report, _Gleader, {Pid, std_error, Report}}, State) when is_pid(Pid) ->
 	{ok, State1} = commit(State, #log_entry{type=error, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 	
-handle_event({error_report, _Gleader, {Pid, Type, Report}}, State) ->
+handle_event({error_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid) ->
 	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 	
-handle_event({warning_msg, _Gleader, {Pid, Format, Data}}, State) ->
+handle_event({warning_msg, _Gleader, {Pid, Format, Data}}, State) when is_pid(Pid) ->
 	{ok, State1} = commit(State, #log_entry{type=warning, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=msg(Format, Data)}),
 	{ok, State1};
 		
-handle_event({warning_report, _Gleader, {Pid, std_warning, Report}}, State) ->
+handle_event({warning_report, _Gleader, {Pid, std_warning, Report}}, State) when is_pid(Pid) ->
 	{ok, State1} = commit(State, #log_entry{type=warning, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 		
-handle_event({warning_report, _Gleader, {Pid, Type, Report}}, State) ->
+handle_event({warning_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid) ->
 	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 		
-handle_event({info_msg, _Gleader, {Pid, Format, Data}}, State) ->
+handle_event({info_msg, _Gleader, {Pid, Format, Data}}, State) when is_pid(Pid) ->
 	{ok, State1} = commit(State, #log_entry{type=info, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=msg(Format, Data)}),
 	{ok, State1};
 		
-handle_event({info_report, _Gleader, {Pid, std_info, Report}}, State) ->
+handle_event({info_report, _Gleader, {Pid, std_info, Report}}, State) when is_pid(Pid) ->
 	{ok, State1} = commit(State, #log_entry{type=info, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 		
-handle_event({info_report, _Gleader, {Pid, Type, Report}}, State) ->
+handle_event({info_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid) ->
 	{ok, State1} = commit(State, #log_entry{type=Type, node=atom_to_list(get_node(Pid)), time=erlang:now(), message=Report}),
 	{ok, State1};
 

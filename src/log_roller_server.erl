@@ -26,8 +26,8 @@
 
 -export([
 	start/2, stop/1, init/1, start_phase/3, 
-	start_webtool/0, start_webtool/3, 
-	reload/0, build_rel/0
+	start_webtool/0, start_webtool/3, total_writes/0,
+	discover/0, reload/0, build_rel/0
 	]).
 	
 %%%
@@ -41,25 +41,49 @@ start(_StartType, _StartArgs) ->
 %% @doc stop the application
 stop(_) -> 
 	ok.
-
-% start_webtool() -> 
-% 	Port = 
-% 		case application:get_env(log_roller_server, webtool_port) of
-% 			undefined -> 8888;
-% 			{ok, Val1} -> Val1
-% 		end,
-% 	BindAddr = 
-% 		case application:get_env(log_roller_server, webtool_bindaddr) of
-% 			undefined -> {0,0,0,0};
-% 			{ok, Val2} -> Val2
-% 		end,
-% 	Server = 
-% 		case application:get_env(log_roller_server, webtool_server) of
-% 			undefined -> "localhost";
-% 			{ok, Val3} -> Val3
-% 		end,
-% 	start_webtool(Port, BindAddr, Server).
 		
+start_webtool() ->
+	start_webtool(standard_data).
+
+start_webtool(Args) ->
+	webtool:start(standard_path, Args),
+	webtool:start_tools([],"app=log_roller"),
+	ok.
+		
+start_webtool(Port, BindAddr, ServerName) when is_integer(Port), is_tuple(BindAddr), is_list(ServerName) ->
+	io:format("start_webtool(~p, ~p, ~p)~n", [Port, BindAddr, ServerName]),
+	(catch net_adm:world()),
+	start_webtool([{port,Port},{bind_address,BindAddr},{server_name,ServerName}]),
+	ok;
+
+start_webtool(Port, BindAddr, ServerName) ->
+	Port1 = 
+		case Port of
+			P when is_integer(P) -> P;
+			P when is_atom(P) -> list_to_integer(atom_to_list(P));
+			P when is_list(P) -> list_to_integer(P)
+		end,
+	Fun = 
+		fun(Addr) ->
+			Vals = string:tokens(re:replace(Addr,"[\{\}]","", [global, {return, list}]), ".,"),
+			list_to_tuple([list_to_integer(Val) || Val <- Vals])
+		end,
+	BindAddr1 =
+		case BindAddr of
+			B when is_atom(B) -> Fun(atom_to_list(B));
+			B when is_list(B) -> Fun(B);
+			B when is_tuple(B) -> B
+		end,
+	ServerName1 =
+		case ServerName of
+			S when is_atom(S) -> atom_to_list(S);
+			S when is_list(S) -> S
+		end,
+	start_webtool(Port1, BindAddr1, ServerName1).
+	
+total_writes() ->
+	log_roller_disk_logger:total_writes().
+	
 %%%
 %%% Internal functions
 %%%
@@ -85,15 +109,6 @@ discover() ->
 	[log_roller_disk_logger:subscribe_to(Node) || Node <- [node()|nodes()]],
 	timer:sleep(360000),
 	discover().
-	
-start_webtool() ->
-	start_webtool(8888, any, "localhost").
-		
-start_webtool(Port, BindAddr, ServerName) ->
-	io:format("start_webtool(~p, ~p, ~p)~n", [Port, BindAddr, ServerName]),
-	webtool:start(standard_path, [{port,Port},{bind_address,BindAddr},{server_name,ServerName}]),
-	webtool:start_tools([],"app=log_roller"),
-	ok.
 
 reload() ->
 	{ok, Modules} = application_controller:get_key(?MODULE, modules),

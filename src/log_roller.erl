@@ -63,6 +63,8 @@ register_subscriber(Node) when is_atom(Node) ->
 		{ok, Pid} ->
 			io:format("ping successful for ~p~n", [Node]),
 			gen_event:call(error_logger, log_roller_h, {subscribe, Pid});
+		{badrpc,{'EXIT',{noproc,{gen_server,call,[log_roller_disk_logger,ping]}}}} ->
+			ok;
 		Err ->
 			io:format("failed to register ~p: ~p~n", [Node, Err]),
 			ok

@@ -23,7 +23,7 @@ install: rel
 	cp bin/*.boot $(prefix)/$(ROOTDIR)/bin/
 	@mkdir -p $(prefix)/etc/init.d
 	mkdir -p $(prefix)/var/log/log_roller
-	cp log_roller_server $(prefix)/etc/init.d/
+	cp log_roller $(prefix)/etc/init.d/
 
 uninstall:
 	rm -rf $(LIBDIR)/log_roller*

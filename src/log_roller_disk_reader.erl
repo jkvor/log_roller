@@ -24,7 +24,7 @@
 -module(log_roller_disk_reader).
 -author('jacob.vorreuter@gmail.com').
 
--compile(export_all).
+-export([terms/3, invalidate_cache/2, start_continuation/0]).
 
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
@@ -67,11 +67,26 @@ invalidate_cache(Cache, _, _) ->
 
 read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Cont) ->
 	%io:format("read {~w, ~w}~n", [Index, Pos]),
+	{_, CurrIndex, CurrPos, _, _} = log_roller_disk_logger:current_location(),
+	IsCurrent =
+		if
+			Index == CurrIndex ->
+				A = snap_to_grid(Pos),
+				B = snap_to_grid(CurrPos),
+				A == B;
+			true ->
+				false
+		end,
 	Dirty =
-		case dict:find({Index, Pos}, Cache) of
-			error -> true;
-			{ok, {cache_entry, true, _, _}} -> true;
-			{ok, CacheEntry} -> CacheEntry
+		if
+			IsCurrent -> 
+				true;
+			true ->
+				case dict:find({Index, Pos}, Cache) of
+					error -> true;
+					{ok, {cache_entry, true, _, _}} -> true;
+					{ok, CacheEntry} -> CacheEntry
+				end
 		end,
 	case Dirty of
 		true ->

@@ -64,10 +64,10 @@ fetch() -> fetch([]).
 %%		 Result = list(list(Time::string(), Type::atom(), Node::string(), Message::string()))
 %% @doc fetch a list of log entries
 fetch(Opts) when is_list(Opts) ->
-	gen_server:call(?MODULE, {fetch, Opts}, infinity).
+	gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), {fetch, Opts}, infinity).
 
 set_current_file(Index) ->
-	gen_server:call(?MODULE, {set_current_file, Index}).
+	gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), {set_current_file, Index}).
 	
 %%====================================================================
 %% gen_server callbacks
@@ -82,6 +82,9 @@ set_current_file(Index) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init(_) ->
+	process_flag(trap_exit, true),
+    ok = pg2:create(log_roller_browser_grp),
+    ok = pg2:join(log_roller_browser_grp, self()),
 	{ok, #state{handles=dict:new(), cache=dict:new()}}.
 
 %%--------------------------------------------------------------------

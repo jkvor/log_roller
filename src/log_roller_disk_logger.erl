@@ -66,6 +66,7 @@ subscribe_to(Node) when is_list(Node) ->
 	subscribe_to(list_to_atom(Node));
 
 subscribe_to(Node) when is_atom(Node) ->
+	io:format("subscribe to ~p~n", [Node]),
 	gen_server:call(?MODULE, {subscribe_to, Node}).
 
 %% @spec ping() -> {ok, Pid}
@@ -209,7 +210,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%--------------------------------------------------------------------
 
 log_file() ->
-	case application:get_env(log_roller_subscriber, log_dir) of
+	case application:get_env(log_roller_server, log_dir) of
 		undefined -> atom_to_list(?LOG_NAME);
 		{ok, Dir} -> 
 			case file:list_dir(Dir) of
@@ -229,12 +230,12 @@ log_file() ->
 initialize_state() ->
 	LogFile = log_file(),
 	Maxbytes = 
-		case application:get_env(log_roller_subscriber, maxbytes) of
+		case application:get_env(log_roller_server, maxbytes) of
 			undefined -> ?DEFAULT_MAXBYTES;
 			{ok, Val1} -> Val1
 		end,
 	Maxfiles = 
-		case application:get_env(log_roller_subscriber, maxfiles) of
+		case application:get_env(log_roller_server, maxfiles) of
 			undefined -> ?DEFAULT_MAXFILES;
 			{ok, Val2} -> Val2
 		end,

@@ -109,7 +109,7 @@ handle_call({subscribe, Pid0}, State) ->
 	State1 =
 		case lists:member(Pid, Pids) of
 			false ->
-				io:format("register pid ~p~n", [Pid]),
+				io:format("registering pid ~p~n", [Pid]),
 				State#state{listening_pids=[Pid|Pids]};
 			true ->
 				State

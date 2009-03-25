@@ -31,8 +31,11 @@ main(_) ->
 		ok
 	end, "fetch log"),
 	
+	application:stop(log_roller_server),
+	application:start(log_roller_server),
+	
 	io:format("sending logs~n"),
-	[error_logger:info_msg("~s: ~w~n", [Text, I]) || I <- lists:seq(1,Num)],
+	[error_logger:error_msg("~s: ~w~n", [Text, I]) || I <- lists:seq(1,Num)],
 	
 	io:format("waiting for write to disk~n"),
 	timer:sleep(3000),
@@ -40,7 +43,7 @@ main(_) ->
 	
 	io:format("fetching~n"),
 	etap_exception:lives_ok(fun() ->
-		etap:is(length(lrb:fetch([{max, Num}])), Num, "fetched correct number of results"),
+		etap:is(length(lrb:fetch([{type, error}, {max, Num}])), Num, "fetched correct number of results"),
 		ok
 	end, "fetch log"),
 	

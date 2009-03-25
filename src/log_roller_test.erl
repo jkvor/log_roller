@@ -28,21 +28,21 @@ setup_test(MaxBytes, MaxFiles) ->
 	ok = error_logger:tty(false),
 	
 	etap_exception:lives_ok(fun() ->
-		etap_application:load_ok(log_roller_subscriber, "Application 'log_roller_subscriber' loaded"),
-		etap_application:load_ok(log_roller_publisher, "Application 'log_roller_publisher' loaded"),
+		etap_application:load_ok(log_roller_server, "Application 'log_roller_server' loaded"),
+		etap_application:load_ok(log_roller, "Application 'log_roller' loaded"),
 		ok
 	end, "load log roller"),
 	
 	Log_Dir = rnd_dir(),
 	put(log_dir, Log_Dir),
 	
-	application:set_env(log_roller_subscriber, log_dir, Log_Dir),
-	application:set_env(log_roller_subscriber, maxbytes, MaxBytes),
-	application:set_env(log_roller_subscriber, maxfiles, MaxFiles),
+	application:set_env(log_roller_server, log_dir, Log_Dir),
+	application:set_env(log_roller_server, maxbytes, MaxBytes),
+	application:set_env(log_roller_server, maxfiles, MaxFiles),
 	
 	etap_exception:lives_ok(fun() ->
-		etap_application:start_ok(log_roller_subscriber, "Application 'log_roller_subscriber' started"),
-		etap_application:start_ok(log_roller_publisher, "Application 'log_roller_publisher' started"),
+		etap_application:start_ok(log_roller_server, "Application 'log_roller_server' started"),
+		etap_application:start_ok(log_roller, "Application 'log_roller' started"),
 		ok
 	end, "start log roller"),
 	

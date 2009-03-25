@@ -106,7 +106,7 @@ read_file(Handles, {continuation, FileStub, Index, Pos, ChunkSize, _, _, _, _}) 
 				{ok, Chunk} -> 
 					{ok, Handles1, Chunk};
 				eof ->
-					{error, eof};
+					{ok, Handles1, []};
 				{error, Reason} -> 
 					{error, Reason}
 			end;

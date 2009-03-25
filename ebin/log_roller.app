@@ -1,12 +1,12 @@
-{application, log_roller_publisher, [
-    {description, "log_roller_publisher"},
+{application, log_roller, [
+    {description, "log_roller"},
     {vsn, "0.2"},
     {modules, [
-        log_roller_publisher,
+        log_roller,
 		log_roller_h
     ]},
     {registered, []},
-    {mod, {log_roller_publisher, []}},
+    {mod, {log_roller, []}},
     {applications, [kernel, stdlib]},
 	{start_phases, [{world, []}, {discovery, []}]}
 ]}.

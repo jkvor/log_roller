@@ -68,6 +68,7 @@ invalidate_cache(Cache, _, _) ->
 read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Cont) ->
 	%io:format("read {~w, ~w}~n", [Index, Pos]),
 	{_, CurrIndex, CurrPos, _, _} = log_roller_disk_logger:current_location(),
+	io:format("curr: {~w, ~w} and cont: {~w, ~w}~n", [CurrIndex,CurrPos,Index,Pos]),
 	IsCurrent =
 		if
 			Index == CurrIndex ->
@@ -90,7 +91,7 @@ read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Con
 		end,
 	case Dirty of
 		true ->
-			%io:format("cache miss: {~w, ~w}~n", [Index, Pos]),
+			io:format("cache miss(~p, ~p): {~w, ~w}~n", [IsCurrent, Dirty, Index, Pos]),
 			case read_file(Handles, Cont) of
 				{ok, Handles1, Chunk} ->
 					BinChunk = list_to_binary(Chunk),
@@ -107,6 +108,7 @@ read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Con
 					{error, Reason}
 			end;
 		{cache_entry, _, Cont1, Terms} ->
+			%io:format("cache hit(~p, ~p): {~w, ~w}~n", [IsCurrent, Dirty, Index, Pos]),
 			LTimestamp1 = Cont1#continuation.last_timestamp,
 			BinRem1 = Cont1#continuation.bin_remainder,
 			{ok, Handles, Cache, Cont#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1}, Terms}
@@ -132,7 +134,9 @@ read_file(Handles, {continuation, FileStub, Index, Pos, ChunkSize, _, _, _, _}) 
 %% @spec start_continuation() -> {ok, continuation()} | {error, string()}
 start_continuation() ->
 	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
-	rewind_location({continuation, FileStub, Index, Pos, ?MAX_CHUNK_SIZE, SizeLimit, MaxIndex, {9999,0,0}, <<>>}).
+	StartPos = snap_to_grid(Pos),
+	ChunkSize = Pos-StartPos,
+	{ok, {continuation, FileStub, Index, StartPos, ChunkSize, SizeLimit, MaxIndex, {9999,0,0}, <<>>}}.
 		
 rewind_location({continuation, FileStub, Index, Pos, _ChunkSize, SizeLimit, MaxIndex, LTimestamp, BinRem}) ->
 	if

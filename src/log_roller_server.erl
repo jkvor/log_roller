@@ -98,6 +98,11 @@ init(_) ->
 	]}}.
 
 %% @hidden
+start_phase(pg2, _, _) ->
+    pg2:which_groups(),
+    ok;
+        
+%% @hidden
 start_phase(world, _, _) ->
 	net_adm:world(),
 	ok;

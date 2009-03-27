@@ -27,6 +27,10 @@
 			color: #990000;
 		}
 		
+		span.crash_report {
+			color: #990000;
+		}
+		
 		pre {
 			margin: 0px;
 			padding: 4px;

@@ -24,18 +24,52 @@
 -module(log_roller_disk_reader).
 -author('jacob.vorreuter@gmail.com').
 
--export([terms/3, invalidate_cache/2, start_continuation/1]).
+-export([start_continuation/1, invalidate_cache/2, terms/3]).
 
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
 
--record(continuation, {file_stub, index, position, chunk_size, size_limit, max_index, last_timestamp, bin_remainder}).
--record(cache_entry, {dirty, continuation, terms}).
-	
+-record(cprops, {file_stub, chunk_size, size_limit, max_index, use_cache}).
+-record(cstate, {index, position, last_timestamp, binary_remainder}).
+-record(continuation, {properties, state}).
+-record(cache_entry, {dirty, cstate, terms}).
+		
+%%====================================================================
+%% API
+%%====================================================================
+
+%% @spec start_continuation(true | false) -> {ok, continuation()} | {error, string()}
+%% @doc fetch a continuation pointed to the log frame currently being written to
+start_continuation(UseCache) ->
+	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
+	StartPos = snap_to_grid(Pos),
+	ChunkSize = Pos-StartPos,
+	Props = {cprops, FileStub, ChunkSize, SizeLimit, MaxIndex, UseCache},
+	State = {cstate, Index, StartPos, {9999,0,0}, <<>>},
+	{ok, {continuation, Props, State}}.
+
+%% @spec invalidate_cache(Cache, Index) -> {ok, Cache1} | {error, string()}
+%% @doc set all cache frames as "dirty" that point to the file ending in Index
+invalidate_cache(Cache, Index) ->
+	Opts = log_roller_disk_logger:options(),
+	{SizeLimit, _} = proplists:get_value(size, Opts),
+	Pos = snap_to_grid(SizeLimit),
+	invalidate_cache_frame(Cache, Index, Pos).
+
+%% @spec terms(Handles, Cache, Cont) -> {ok, Handles1, Cache1, Cont1, Terms} | {error, any()}	
+%%		 Handles = dict()
+%%		 Cache = dict()
+%%		 Cont = continuation()
+%% @doc fetch the terms for the continuation passed in
 terms(Handles, Cache, Cont) ->
 	case read_chunk(Handles, Cache, Cont) of
 		{ok, Handles1, Cache1, Cont1, Terms} ->
-			case full_cycle(Cont1#continuation.last_timestamp, Cont#continuation.last_timestamp) of
+			Timestamp1 = (Cont1#continuation.state)#cstate.last_timestamp,
+			Timestamp2 = (Cont#continuation.state)#cstate.last_timestamp,
+			%% the continuation record stores the last timestamp it encountered
+			%% while traveling backward through the log files. If the timestamp
+			%% jumps foreward that means all log files have been traversed.
+			case is_full_cycle(Timestamp1, Timestamp2) of
 				true ->
 					{error, read_full_cycle};
 				false ->
@@ -45,81 +79,101 @@ terms(Handles, Cache, Cont) ->
 		{error, Reason} ->
 			{error, Reason}
 	end.
+
+
+%%--------------------------------------------------------------------
+%%% Internal functions
+%%--------------------------------------------------------------------
 	
-invalidate_cache(Cache, Index) ->
-	Opts = log_roller_disk_logger:options(),
-	{SizeLimit, _} = proplists:get_value(size, Opts),
-	Pos = snap_to_grid(SizeLimit),
-	invalidate_cache(Cache, Index, Pos).
-	
-invalidate_cache(Cache, Index, Pos) when Pos >= 0 ->
+%% lookup cache frames by the key {Index, Pos} and set as "dirty"
+invalidate_cache_frame(Cache, Index, Pos) when Pos >= 0 ->
 	Cache1 =
 		case dict:find({Index, Pos}, Cache) of
 			error -> Cache;
 			{ok, CacheEntry} ->
-				%io:format("invalidate cache {~w, ~w}~n", [Index, Pos]),
 				dict:store({Index, Pos}, CacheEntry#cache_entry{dirty=true}, Cache)
 		end,
-	invalidate_cache(Cache1, Index, Pos-?MAX_CHUNK_SIZE);
+	invalidate_cache_frame(Cache1, Index, Pos-?MAX_CHUNK_SIZE);
 	
-invalidate_cache(Cache, _, _) ->
+invalidate_cache_frame(Cache, _, _) ->
 	{ok, Cache}.
 
-read_chunk(Handles, Cache, {continuation, _, Index, Pos, _, _, _, _, BinRem}=Cont) ->
-	%io:format("read {~w, ~w}~n", [Index, Pos]),
-	{_, CurrIndex, CurrPos, _, _} = log_roller_disk_logger:current_location(),
-	io:format("curr: {~w, ~w} and cont: {~w, ~w}~n", [CurrIndex,CurrPos,Index,Pos]),
-	IsCurrent =
-		if
-			Index == CurrIndex ->
-				A = snap_to_grid(Pos),
-				B = snap_to_grid(CurrPos),
-				A == B;
-			true ->
-				false
-		end,
-	Dirty =
-		if
-			IsCurrent -> 
-				true;
-			true ->
-				case dict:find({Index, Pos}, Cache) of
-					error -> true;
-					{ok, {cache_entry, true, _, _}} -> true;
-					{ok, CacheEntry} -> CacheEntry
-				end
-		end,
-	case Dirty of
+%% @spec read_chunk(Handles, Cache, Cont) -> {ok, Handles1, Cache1, Cont1, Terms} | {error, any()}
+%% read a chunk either from cache or file
+%%	def chunk - a block of binary data containing erlang tuples (log_entry records)
+read_chunk(Handles, Cache, #continuation{properties=Props, state=State}=Cont) ->
+    CacheFrame = get_cache_frame(Props#cprops.use_cache, Cache, State#cstate.index, State#cstate.position),
+    case CacheFrame of
+        undefined -> read_chunk_from_file(Handles, Cache, Cont);
+        _ -> read_chunk_from_cache(Handles, Cache, Cont, CacheFrame)
+    end.
+    
+%% @spec get_cache_frame(UseCache, Cache, Index, Pos) -> cache_entry() | undefined
+%% fetch the cache frame for the {Index,Pos} key
+get_cache_frame(false, _, _, _) -> undefined;
+get_cache_frame(true, Cache, Index, Pos) ->
+    IsCurrent = is_current_location(Index, Pos),
+    if
+		IsCurrent -> 
+		    %% ignore cache for the frame being written to currently
+			undefined;
 		true ->
-			io:format("cache miss(~p, ~p): {~w, ~w}~n", [IsCurrent, Dirty, Index, Pos]),
-			case read_file(Handles, Cont) of
-				{ok, Handles1, Chunk} ->
-					BinChunk = list_to_binary(Chunk),
-					Bin = <<BinChunk/binary, BinRem/binary>>,
-					case parse_terms(Bin, <<>>, [], {9999,0,0}) of
-						{ok, Terms, BinRem1, LTimestamp1} ->
-							Cont1 = Cont#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1},
-							Cache1 = dict:store({Index, Pos}, {cache_entry, false, Cont1, Terms}, Cache),
-							{ok, Handles1, Cache1, Cont1, Terms};
-						{error, Reason} ->
-							{error, Reason}
-					end;
+			case dict:find({Index, Pos}, Cache) of
+				error -> undefined; %% cache frame does not exist
+				{ok, {cache_entry, true, _, _}} -> undefined; %% cache frame is dirty
+				{ok, CacheEntry} -> CacheEntry
+			end
+	end.
+	
+%% Fetch the current location from the disk logger.
+%% If {Index,Pos} is inside the frame currently being
+%% written to then return true, otherwise, false
+is_current_location(Index, Pos) ->
+    {_, CurrIndex, CurrPos, _, _} = log_roller_disk_logger:current_location(),
+    if
+		Index == CurrIndex ->
+			A = snap_to_grid(Pos),
+			B = snap_to_grid(CurrPos),
+			A == B;
+		true ->
+			false
+	end.
+	
+read_chunk_from_file(Handles, Cache, #continuation{state=State}=Cont) ->
+	case read_file(Handles, Cont) of
+		{ok, Handles1, Chunk} ->
+			BinChunk = list_to_binary(Chunk),
+			BinRem = State#cstate.binary_remainder,
+			Bin = <<BinChunk/binary, BinRem/binary>>,
+			case parse_terms(Bin, <<>>, [], {9999,0,0}) of
+				{ok, Terms, BinRem1, LTimestamp1} ->
+				    Index = State#cstate.index,
+				    Pos = State#cstate.position,
+				    State1 = State#cstate{last_timestamp=LTimestamp1, binary_remainder=BinRem1},
+				    Cont1 = Cont#continuation{state=State1},
+					Cache1 = dict:store({Index, Pos}, {cache_entry, false, State1, Terms}, Cache),
+					{ok, Handles1, Cache1, Cont1, Terms};
 				{error, Reason} ->
 					{error, Reason}
 			end;
-		{cache_entry, _, Cont1, Terms} ->
-			%io:format("cache hit(~p, ~p): {~w, ~w}~n", [IsCurrent, Dirty, Index, Pos]),
-			LTimestamp1 = Cont1#continuation.last_timestamp,
-			BinRem1 = Cont1#continuation.bin_remainder,
-			{ok, Handles, Cache, Cont#continuation{last_timestamp=LTimestamp1, bin_remainder=BinRem1}, Terms}
+		{error, Reason} ->
+			{error, Reason}
 	end.
 	
-read_file(Handles, {continuation, FileStub, Index, Pos, ChunkSize, _, _, _, _}) ->
-	FileName = lists:flatten(io_lib:format("~s.~w", [FileStub, Index])),
-	case file_handle(FileName, Handles) of
+read_chunk_from_cache(Handles, Cache, #continuation{state=State}=Cont, CacheEntry) ->
+    io:format("read from cache {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
+    CacheState = CacheEntry#cache_entry.cstate,
+    LTimestamp = CacheState#cstate.last_timestamp,
+	BinRem = CacheState#cstate.binary_remainder,
+	State1 = State#cstate{last_timestamp=LTimestamp, binary_remainder=BinRem},
+	{ok, Handles, Cache, Cont#continuation{state=State1}, CacheEntry#cache_entry.terms}.
+	
+read_file(Handles, #continuation{properties=Props, state=State}) ->
+    io:format("read from file {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
+	FileName = lists:flatten(io_lib:format("~s.~w", [Props#cprops.file_stub, State#cstate.index])),
+	case file_handle(Handles, FileName) of
 		{ok, Handles1, IoDevice} ->
-			%io:format("pread(~p, ~p, ~p)~n", [IoDevice, Pos, ChunkSize]),
-			case file:pread(IoDevice, Pos, ChunkSize) of
+			case file:pread(IoDevice, State#cstate.position, Props#cprops.chunk_size) of
 				{ok, Chunk} -> 
 					{ok, Handles1, Chunk};
 				eof ->
@@ -131,21 +185,31 @@ read_file(Handles, {continuation, FileStub, Index, Pos, ChunkSize, _, _, _, _}) 
 			{error, Reason}
 	end.
 	
-%% @spec start_continuation() -> {ok, continuation()} | {error, string()}
-start_continuation(_) ->
-	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
-	StartPos = snap_to_grid(Pos),
-	ChunkSize = Pos-StartPos,
-	{ok, {continuation, FileStub, Index, StartPos, ChunkSize, SizeLimit, MaxIndex, {9999,0,0}, <<>>}}.
+file_handle(Handles, FileName) ->
+	case dict:find(FileName, Handles) of
+		{ok, IoDevice} ->
+			{ok, Handles, IoDevice};
+		error ->
+			case file:open(FileName, [read]) of
+				{ok, IoDevice} ->
+					Handles1 = dict:store(FileName, IoDevice, Handles),
+					{ok, Handles1, IoDevice};
+				{error, Reason} ->
+					{error, Reason}
+			end
+	end.
 		
-rewind_location({continuation, FileStub, Index, Pos, _ChunkSize, SizeLimit, MaxIndex, LTimestamp, BinRem}) ->
+rewind_location(#continuation{properties=Props, state=State}=Cont) ->
+    FileStub = Props#cprops.file_stub,
+    MaxIndex = Props#cprops.max_index,
+    Index = State#cstate.index,
+    Pos = State#cstate.position,
 	if
 		%% file handle was left at beginning of file
 		Pos =:= 0 -> 
 			%% move to previous index file
 			case rewind_file_index(FileStub, Index, undefined, MaxIndex) of
 				{ok, FileSize, Index1} ->
-					%% set position <chunk size> from end of file	
 					{Pos1,ChunkSize1} =
 						if
 							FileSize > ?MAX_CHUNK_SIZE ->
@@ -154,15 +218,21 @@ rewind_location({continuation, FileStub, Index, Pos, _ChunkSize, SizeLimit, MaxI
 							true ->
 								{0, ?MAX_CHUNK_SIZE}
 						end,
-					{ok, {continuation, FileStub, Index1, Pos1, ChunkSize1, SizeLimit, MaxIndex, LTimestamp, BinRem}};
+					Props1 = Props#cprops{chunk_size=ChunkSize1},
+					State1 = State#cstate{index=Index1, position=Pos1},
+					{ok, Cont#continuation{properties=Props1, state=State1}};
 				{error, Reason} ->
 					{error, Reason}
 			end;
 		Pos =< ?MAX_CHUNK_SIZE -> %% less than one chunk left
-			{ok, {continuation, FileStub, Index, 0, ?MAX_CHUNK_SIZE, SizeLimit, MaxIndex, LTimestamp, BinRem}};
+		    Props1 = Props#cprops{chunk_size=?MAX_CHUNK_SIZE},
+			State1 = State#cstate{position=0},
+			{ok, Cont#continuation{properties=Props1, state=State1}};
 		true -> %% more than a chunk's worth left
 			Pos1 = snap_to_grid(Pos - ?MAX_CHUNK_SIZE),
-			{ok, {continuation, FileStub, Index, Pos1, (Pos-Pos1), SizeLimit, MaxIndex, LTimestamp, BinRem}}
+			Props1 = Props#cprops{chunk_size=(Pos-Pos1)},
+			State1 = State#cstate{position=Pos1},
+			{ok, Cont#continuation{properties=Props1, state=State1}}
 	end.	
 
 %% if Index and StartingIndex match then we've cycled all the way around
@@ -191,20 +261,6 @@ rewind_file_index(FileStub, Index, StartingIndex, MaxIndex) ->
 			{error, Reason}
 	end.
 			
-file_handle(FileName, Handles) ->
-	case dict:find(FileName, Handles) of
-		{ok, IoDevice} ->
-			{ok, Handles, IoDevice};
-		error ->
-			case file:open(FileName, [read]) of
-				{ok, IoDevice} ->
-					Handles1 = dict:store(FileName, IoDevice, Handles),
-					{ok, Handles1, IoDevice};
-				{error, Reason} ->
-					{error, Reason}
-			end
-	end.
-
 %% @spec parse_terms(Bin, Rem, Acc, LTimestamp) -> Result
 %%		 Bin = binary()
 %%		 Rem = binary()
@@ -212,13 +268,11 @@ file_handle(FileName, Handles) ->
 %%		 LTimestamp = tuple()
 %%		 Result = {ok, Terms, Rem}
 parse_terms(<<16#FF:8, 16#FF:8, 16#FF:8, 16#FF:8, LogSize:16/integer, Rest/binary>> = Bin, Rem, Acc, LTimestamp) ->
-	%io:format("parse terms: ~p~n", [LogSize]),
 	if 
 		size(Rest) >= LogSize ->
 			case Rest of
 				<<Log:LogSize/binary, 16#EE:8, 16#EE:8, 16#EE:8, 16#EE:8, Tail/binary>> ->
 					Term = binary_to_term(Log),
-					%io:format("term: ~p and tail: ~p~n", [Term, Tail]),
 					parse_terms(Tail, Rem, [Term|Acc], Term#log_entry.time);
 				_ ->
 					io:format("bad binary data: ~n~p~n", [Bin]),
@@ -232,13 +286,12 @@ parse_terms(<<>>, Rem, Acc, LTimestamp) ->
 	{ok, Acc, Rem, LTimestamp};
 	
 parse_terms(<<A:8, Rest/binary>>, Rem, Acc, LTimestamp) ->
-	%io:format("parse terms ~p, ~p~n", [A, Rest]),
 	parse_terms(Rest, <<Rem/binary, A>>, Acc, LTimestamp).
 		
 snap_to_grid(Position) ->
 	((Position div ?MAX_CHUNK_SIZE) * ?MAX_CHUNK_SIZE).
 	
-full_cycle({A1,B1,C1}, {A2,B2,C2}) ->
+is_full_cycle({A1,B1,C1}, {A2,B2,C2}) ->
 	if 
 		A1 =:= A2, B1 =:= B2, C1 >= C2 -> true;
 		A1 =:= A2, B1 > B2 -> true;

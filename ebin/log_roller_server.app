@@ -10,5 +10,5 @@
     {registered, []},
     {mod, {log_roller_server, []}},
     {applications, [kernel, stdlib]},
-	{start_phases, [{world, []}, {discovery, []}]}
+	{start_phases, [{pg2, []}, {world, []}, {discovery, []}]}
 ]}.

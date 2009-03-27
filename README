@@ -20,8 +20,8 @@ or download the tarball from jacobvorreuter.github.com/log_roller
 and run "sudo make install"
 
 == Integration ==
-To enable a node as a publisher, start the log_roller application
-on that node. This can be done either in the app file of your
+To begin logging messages with log_roller, simple start the
+log_roller application. This can be done either in the app file of your
 application:
 
 {application, my_app, [
@@ -35,43 +35,34 @@ application:
 
 -or-
 
-you can add a -boot argument to the erl shell command:
-
-erl -name myapp -boot log_roller
-
--or-
-
 you can just call application:start from somewhere in your app:
 
 ok = application:start(log_roller)
 
-Once the log_roller application is started on a publisher node
-it will attempt to ping each node that is visible to it, looking
-for log_roller subscriber nodes.  Subscriber nodes that receive
-this ping will subscribe to the publisher node that pinged them.
+Nodes with log_roller enabled will automatically ping visible
+log_roller server nodes to establish a connection.
 
 ******
 
-To start a subscriber node, you must either use the log_roller boot
-script or set the -log_roller_type "subscriber" command line argument
-to erl.
+To start a subscriber node, you must either use the log_roller_server
+boot script or start the log_roller_server application.
 
-During the install of log_roller, a boot script named "log_roller" is
-placed in /etc/init.d. Its usage is as follows:
+erl -name server -boot log_roller_server
 
-sudo /etc/init.d/log_roller console # start log_roller attached
-sudo /etc/init.d/log_roller start # start in detached mode
+-or-
 
-This will start a log_roller subscriber node and boot webtool.
+{application, my_app, [
+    {description, "my_app"},
+    {vsn, "0.2"},
+    {modules, []},
+    {registered, []},
+    {mod, {my_app, []}},
+    {applications, [kernel, stdlib, log_roller_server]}
+]}.
 
-It is also possible to specify "-log_roller_type subscriber" and
-also "-webtool start" in the shell. For example:
+-or-
 
-erl -name foo -log_roller_type subscriber -webtool start
-
-This will tell the log_roller application to start a subscriber
-node as well as webtool when it starts.  It is also possible to 
-include -boot log_roller in the shell.
+ok = application:start(log_roller_server)
 
 == CONFIGURATION ==
 There is a config file, "log_roller.config" located in the priv 

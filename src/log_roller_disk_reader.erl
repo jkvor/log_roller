@@ -24,7 +24,7 @@
 -module(log_roller_disk_reader).
 -author('jacob.vorreuter@gmail.com').
 
--export([terms/3, invalidate_cache/2, start_continuation/0]).
+-export([terms/3, invalidate_cache/2, start_continuation/1]).
 
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
@@ -132,7 +132,7 @@ read_file(Handles, {continuation, FileStub, Index, Pos, ChunkSize, _, _, _, _}) 
 	end.
 	
 %% @spec start_continuation() -> {ok, continuation()} | {error, string()}
-start_continuation() ->
+start_continuation(_) ->
 	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
 	StartPos = snap_to_grid(Pos),
 	ChunkSize = Pos-StartPos,

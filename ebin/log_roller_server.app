@@ -4,10 +4,8 @@
     {modules, [
         log_roller_server,
 		log_roller_disk_logger,
-		log_roller_browser,
-		log_roller_webtool,
 		lrb,
-		rb_raw
+		log_roller_webtool
     ]},
     {registered, []},
     {mod, {log_roller_server, []}},

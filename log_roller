@@ -28,6 +28,14 @@ start_server() {
 	erl -detached -name log_roller@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_server -noshell $(get_sasl)
 }
 
+dev_webtool() {
+	if [ -z "${ARG1}" ] || [ -z "${ARG2}" ] || [ -z "${ARG3}" ]; then
+		echo -e "Invalid webtool args: <port> <bindaddr> <servername>"
+	else
+		erl -name webtool@$HOSTNAME +W w +A 1 -pa ebin -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})"
+	fi
+}
+
 console_webtool() {
 	if [ -z "${ARG1}" ] || [ -z "${ARG2}" ] || [ -z "${ARG3}" ]; then
 		echo -e "Invalid webtool args: <port> <bindaddr> <servername>"

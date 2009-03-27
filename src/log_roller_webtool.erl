@@ -62,7 +62,7 @@ display(QS) ->
 		end, [], QS),
 		
 	io:format("options: ~p~n", [Opts]),
-	case (catch log_roller_browser:fetch(Opts)) of
+	case (catch lrb:fetch(Opts)) of
 		List when is_list(List) ->
 			%io:format("fetch success: ~p~n", [List]),
 			Header = lr_header:render({data, ?TOOL_BASE_URL, 

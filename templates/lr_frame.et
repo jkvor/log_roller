@@ -68,6 +68,14 @@
 			border: 1px solid #FED9D4;
 			background: #FED9D4;
 		}
+		
+		pre.crash_report {
+			margin-bottom: 2px;
+			padding-left: 10px;
+			padding-right: 10px;
+			border: 1px solid #FED9D4;
+			background: #FED9D4;
+		}
 			
 		a:link {
 			text-decoration: none;

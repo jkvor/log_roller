@@ -57,6 +57,7 @@ start_webtool(Port, BindAddr, ServerName) when is_integer(Port), is_tuple(BindAd
 	ok;
 
 start_webtool(Port, BindAddr, ServerName) ->
+	io:format("start_webtool(~p, ~p, ~p)~n", [Port, BindAddr, ServerName]),
 	Port1 = 
 		case Port of
 			P when is_integer(P) -> P;
@@ -65,6 +66,7 @@ start_webtool(Port, BindAddr, ServerName) ->
 		end,
 	Fun = 
 		fun(Addr) ->
+			io:format("addr: ~p~n", [Addr]),
 			Vals = string:tokens(re:replace(Addr,"[\{\}]","", [global, {return, list}]), ".,"),
 			list_to_tuple([list_to_integer(Val) || Val <- Vals])
 		end,
@@ -92,7 +94,7 @@ total_writes() ->
 init(_) ->
 	{ok, {{one_for_one, 10, 10}, [
 	    {log_roller_disk_logger, {log_roller_disk_logger, start_link, []}, permanent, 5000, worker, [log_roller_disk_logger]},
-		{log_roller_browser, {log_roller_browser, start_link, []}, permanent, 5000, worker, [log_roller_browser]}
+		{lrb, {lrb, start_link, []}, permanent, 5000, worker, [lrb]}
 	]}}.
 
 %% @hidden

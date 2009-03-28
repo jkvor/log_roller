@@ -25,7 +25,7 @@
 -behaviour(application).
 
 -export([
-	start/2, stop/1, start_phase/3,
+	start/2, stop/1, start_phase/3, queue_length/0,
 	register_subscriber/1, get_registered_subscribers/0
 ]).
 
@@ -41,7 +41,13 @@ start(_StartType, _StartArgs) ->
 %% @doc stop the application
 stop(_) -> 
 	ok.
+
+get_registered_subscribers() ->
+	gen_event:call(error_logger, log_roller_h, subscribers).
 	
+queue_length() ->
+	erlang:process_info(erlang:whereis(error_logger), message_queue_len).
+		
 %%%
 %%% Internal functions
 %%%
@@ -59,7 +65,7 @@ start_phase(discovery, _, _) ->
 %% @spec register_subscriber(Node::node()) -> ok
 %% @doc ping Node to determine if it is a subscriber and register with event handler if it is
 register_subscriber(Node) when is_atom(Node) ->
-	case (catch rpc:call(Node, log_roller_disk_logger, ping, [])) of
+	case catch rpc:call(Node, log_roller_disk_logger, ping, []) of
 		{ok, Pid} ->
 			io:format("ping successful for ~p~n", [Node]),
 			gen_event:call(error_logger, log_roller_h, {subscribe, Pid});
@@ -69,6 +75,3 @@ register_subscriber(Node) when is_atom(Node) ->
 			io:format("failed to register ~p: ~p~n", [Node, Err]),
 			ok
 	end.
-	
-get_registered_subscribers() ->
-	gen_event:call(error_logger, log_roller_h, subscribers).

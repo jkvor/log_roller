@@ -3,5 +3,5 @@
 <%@ print_log(_Prefix, [Time, Type, Node, Msg]) %>
 <pre class="logs" onmouseover="javascript:this.className='<% atom_to_list(Type) %>';" onmouseout="javascript:this.className='logs';">
 <span class="<% atom_to_list(Type) %>">= <% string:left(atom_to_list(Type) ++ " ", 22, $=) %> <% string:left(Time ++ " ", 32, $=) %></span> <span><% Node %></span>
-<% re:replace(lists:flatten(io_lib:format("~p", [Msg])), "\\n", "</br>", [global, {return, list}]) %>
+<% lists:flatten(io_lib:format("~p", [Msg])) %>
 </pre>

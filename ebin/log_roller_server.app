@@ -4,6 +4,7 @@
     {modules, [
         log_roller_server,
 		log_roller_disk_logger,
+		log_roller_cache,
 		lrb,
 		log_roller_webtool
     ]},

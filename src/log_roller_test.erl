@@ -66,3 +66,13 @@ rm_dir(Dir) ->
 	{ok, Filenames} = file:list_dir(Dir),
 	[file:delete(Dir ++ "/" ++ File) || File <- Filenames],
 	file:del_dir(Dir).
+	
+wait_for_queue_to_empty() ->
+	wait_for_queue_to_empty(log_roller:queue_length()).
+	
+wait_for_queue_to_empty({_,0}) -> ok;
+wait_for_queue_to_empty(_) ->
+	timer:sleep(50),
+	wait_for_queue_to_empty(log_roller:queue_length()).
+	
+	

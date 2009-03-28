@@ -24,7 +24,7 @@ main(_) ->
 	%% and then cached in the disk_log gen_server we must both wait for the disk_log to 
 	%% receive them all and then flush the disk_log cache before trying to read from disk
 	io:format("waiting for write to disk~n"),
-	timer:sleep(3000),
+	log_roller_test:wait_for_queue_to_empty(),
 	ok = log_roller_disk_logger:sync(),
 	
 	io:format("fetching~n"),

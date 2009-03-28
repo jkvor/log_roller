@@ -24,7 +24,7 @@
 -module(log_roller_disk_reader).
 -author('jacob.vorreuter@gmail.com').
 
--export([start_continuation/1, invalidate_cache/2, terms/3]).
+-export([start_continuation/1, invalidate_cache/1, terms/1]).
 
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
@@ -32,7 +32,7 @@
 -record(cprops, {file_stub, chunk_size, size_limit, max_index, use_cache}).
 -record(cstate, {index, position, last_timestamp, binary_remainder}).
 -record(continuation, {properties, state}).
--record(cache_entry, {dirty, cstate, terms}).
+-record(cache_entry, {cstate, terms}).
 		
 %%====================================================================
 %% API
@@ -48,22 +48,20 @@ start_continuation(UseCache) ->
 	State = {cstate, Index, StartPos, {9999,0,0}, <<>>},
 	{ok, {continuation, Props, State}}.
 
-%% @spec invalidate_cache(Cache, Index) -> {ok, Cache1} | {error, string()}
-%% @doc set all cache frames as "dirty" that point to the file ending in Index
-invalidate_cache(Cache, Index) ->
+%% @spec invalidate_cache(Index) -> ok | {error, string()}
+%% @doc remove all cache entries that point to the file ending in Index
+invalidate_cache(Index) ->
 	Opts = log_roller_disk_logger:options(),
 	{SizeLimit, _} = proplists:get_value(size, Opts),
 	Pos = snap_to_grid(SizeLimit),
-	invalidate_cache_frame(Cache, Index, Pos).
+	invalidate_cache_frame(Index, Pos).
 
-%% @spec terms(Handles, Cache, Cont) -> {ok, Handles1, Cache1, Cont1, Terms} | {error, any()}	
-%%		 Handles = dict()
-%%		 Cache = dict()
+%% @spec terms(Cont) -> {ok, Cont1, Terms} | {error, any()}	
 %%		 Cont = continuation()
 %% @doc fetch the terms for the continuation passed in
-terms(Handles, Cache, Cont) ->
-	case read_chunk(Handles, Cache, Cont) of
-		{ok, Handles1, Cache1, Cont1, Terms} ->
+terms(Cont) ->
+	case read_chunk(Cont) of
+		{ok, Cont1, Terms} ->
 			Timestamp1 = (Cont1#continuation.state)#cstate.last_timestamp,
 			Timestamp2 = (Cont#continuation.state)#cstate.last_timestamp,
 			%% the continuation record stores the last timestamp it encountered
@@ -74,54 +72,46 @@ terms(Handles, Cache, Cont) ->
 					{error, read_full_cycle};
 				false ->
 					{ok, Cont2} = rewind_location(Cont1),
-					{ok, Handles1, Cache1, Cont2, Terms}
+					{ok, Cont2, Terms}
 			end;
 		{error, Reason} ->
 			{error, Reason}
 	end.
 
-
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
 	
-%% lookup cache frames by the key {Index, Pos} and set as "dirty"
-invalidate_cache_frame(Cache, Index, Pos) when Pos >= 0 ->
-	Cache1 =
-		case dict:find({Index, Pos}, Cache) of
-			error -> Cache;
-			{ok, CacheEntry} ->
-				dict:store({Index, Pos}, CacheEntry#cache_entry{dirty=true}, Cache)
-		end,
-	invalidate_cache_frame(Cache1, Index, Pos-?MAX_CHUNK_SIZE);
+%% lookup cache frames by the key {Index, Pos} and delete
+invalidate_cache_frame(Index, Pos) when Pos >= 0 ->
+	log_roller_cache:delete({Index, Pos}),
+	invalidate_cache_frame(Index, Pos-?MAX_CHUNK_SIZE);
 	
-invalidate_cache_frame(Cache, _, _) ->
-	{ok, Cache}.
+invalidate_cache_frame(_, _) -> ok.
 
-%% @spec read_chunk(Handles, Cache, Cont) -> {ok, Handles1, Cache1, Cont1, Terms} | {error, any()}
+%% @spec read_chunk(Cont) -> {ok, Cont1, Terms} | {error, any()}
 %% read a chunk either from cache or file
 %%	def chunk - a block of binary data containing erlang tuples (log_entry records)
-read_chunk(Handles, Cache, #continuation{properties=Props, state=State}=Cont) ->
-    CacheFrame = get_cache_frame(Props#cprops.use_cache, Cache, State#cstate.index, State#cstate.position),
+read_chunk(#continuation{properties=Props, state=State}=Cont) ->
+    CacheFrame = get_cache_frame(Props#cprops.use_cache, State#cstate.index, State#cstate.position),
     case CacheFrame of
-        undefined -> read_chunk_from_file(Handles, Cache, Cont);
-        _ -> read_chunk_from_cache(Handles, Cache, Cont, CacheFrame)
+        undefined -> read_chunk_from_file(Cont);
+        _ -> read_chunk_from_cache(Cont, CacheFrame)
     end.
     
-%% @spec get_cache_frame(UseCache, Cache, Index, Pos) -> cache_entry() | undefined
+%% @spec get_cache_frame(UseCache, Index, Pos) -> cache_entry() | undefined
 %% fetch the cache frame for the {Index,Pos} key
-get_cache_frame(false, _, _, _) -> undefined;
-get_cache_frame(true, Cache, Index, Pos) ->
+get_cache_frame(false, _, _) -> undefined;
+get_cache_frame(true, Index, Pos) ->
     IsCurrent = is_current_location(Index, Pos),
     if
 		IsCurrent -> 
 		    %% ignore cache for the frame being written to currently
 			undefined;
 		true ->
-			case dict:find({Index, Pos}, Cache) of
-				error -> undefined; %% cache frame does not exist
-				{ok, {cache_entry, true, _, _}} -> undefined; %% cache frame is dirty
-				{ok, CacheEntry} -> CacheEntry
+			case log_roller_cache:get({Index, Pos}) of
+				undefined -> undefined; %% cache frame does not exist
+				CacheEntry -> CacheEntry
 			end
 	end.
 	
@@ -139,9 +129,9 @@ is_current_location(Index, Pos) ->
 			false
 	end.
 	
-read_chunk_from_file(Handles, Cache, #continuation{state=State}=Cont) ->
-	case read_file(Handles, Cont) of
-		{ok, Handles1, Chunk} ->
+read_chunk_from_file(#continuation{state=State}=Cont) ->
+	case read_file(Cont) of
+		{ok, Chunk} ->
 			BinChunk = list_to_binary(Chunk),
 			BinRem = State#cstate.binary_remainder,
 			Bin = <<BinChunk/binary, BinRem/binary>>,
@@ -151,8 +141,8 @@ read_chunk_from_file(Handles, Cache, #continuation{state=State}=Cont) ->
 				    Pos = State#cstate.position,
 				    State1 = State#cstate{last_timestamp=LTimestamp1, binary_remainder=BinRem1},
 				    Cont1 = Cont#continuation{state=State1},
-					Cache1 = dict:store({Index, Pos}, {cache_entry, false, State1, Terms}, Cache),
-					{ok, Handles1, Cache1, Cont1, Terms};
+					log_roller_cache:put({Index, Pos}, {cache_entry, State1, Terms}),
+					{ok, Cont1, Terms};
 				{error, Reason} ->
 					{error, Reason}
 			end;
@@ -160,24 +150,24 @@ read_chunk_from_file(Handles, Cache, #continuation{state=State}=Cont) ->
 			{error, Reason}
 	end.
 	
-read_chunk_from_cache(Handles, Cache, #continuation{state=State}=Cont, CacheEntry) ->
+read_chunk_from_cache(#continuation{state=State}=Cont, CacheEntry) ->
     io:format("read from cache {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
     CacheState = CacheEntry#cache_entry.cstate,
     LTimestamp = CacheState#cstate.last_timestamp,
 	BinRem = CacheState#cstate.binary_remainder,
 	State1 = State#cstate{last_timestamp=LTimestamp, binary_remainder=BinRem},
-	{ok, Handles, Cache, Cont#continuation{state=State1}, CacheEntry#cache_entry.terms}.
+	{ok, Cont#continuation{state=State1}, CacheEntry#cache_entry.terms}.
 	
-read_file(Handles, #continuation{properties=Props, state=State}) ->
+read_file(#continuation{properties=Props, state=State}) ->
     io:format("read from file {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
 	FileName = lists:flatten(io_lib:format("~s.~w", [Props#cprops.file_stub, State#cstate.index])),
-	case file_handle(Handles, FileName) of
-		{ok, Handles1, IoDevice} ->
+	case file_handle(FileName) of
+		{ok, IoDevice} ->
 			case file:pread(IoDevice, State#cstate.position, Props#cprops.chunk_size) of
 				{ok, Chunk} -> 
-					{ok, Handles1, Chunk};
+					{ok, Chunk};
 				eof ->
-					{ok, Handles1, []};
+					{ok, []};
 				{error, Reason} -> 
 					{error, Reason}
 			end;
@@ -185,18 +175,18 @@ read_file(Handles, #continuation{properties=Props, state=State}) ->
 			{error, Reason}
 	end.
 	
-file_handle(Handles, FileName) ->
-	case dict:find(FileName, Handles) of
-		{ok, IoDevice} ->
-			{ok, Handles, IoDevice};
-		error ->
+file_handle(FileName) ->
+	case log_roller_cache:get(FileName) of
+		undefined ->
 			case file:open(FileName, [read]) of
 				{ok, IoDevice} ->
-					Handles1 = dict:store(FileName, IoDevice, Handles),
-					{ok, Handles1, IoDevice};
+					log_roller_cache:put(FileName, IoDevice),
+					{ok, IoDevice};
 				{error, Reason} ->
 					{error, Reason}
-			end
+			end;
+		IoDevice ->
+			{ok, IoDevice}
 	end.
 		
 rewind_location(#continuation{properties=Props, state=State}=Cont) ->

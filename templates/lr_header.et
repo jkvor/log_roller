@@ -10,7 +10,7 @@
 					<option value="progress" <% selected("progress", Type) %>>Progress</option>
 					<option value="info" <% selected("info", Type) %>>Info</option>
 					<option value="error" <% selected("error", Type) %>>Error</option>
-					<option value="crash_report" <% selected("crash_report", Type) %>>Error</option>
+					<option value="crash_report" <% selected("crash_report", Type) %>>Crash Report</option>
 				</select>
 			</td>
 		</tr>

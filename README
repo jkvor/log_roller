@@ -103,6 +103,5 @@ OTHER DEALINGS IN THE SOFTWARE.
   parsing logs
 * filter logs
 * read index file instead of asking disk_log where current head is
-* get queue length of error_logger instead of using timer:sleep to wait for messages to be recv'd
 * add to webtool results number of terms and paging capability
-* add {cache, false} option to browser
+* add code coverage target

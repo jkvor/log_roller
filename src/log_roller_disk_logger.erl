@@ -174,7 +174,6 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, total_writes=Writes
 	BinLog = term_to_binary(LogEntry),
 	LogSize = size(BinLog),
 	Bin = <<?Bin_Term_Start/binary, LogSize:16, BinLog:LogSize/binary, ?Bin_Term_Stop/binary>>,
-	%io:format("log for ~p: ~p~n", [Log, Bin]),
 	disk_log:blog(Log, Bin),
 	{noreply, State#state{total_writes=Writes+1}};
 

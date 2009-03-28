@@ -5,20 +5,19 @@
 		<tr>
 			<td>Type:</td>
 			<td>
-				<select multiple size="4" name="type" style="width: 250px;">
+				<select multiple size="5" name="type" style="width: 250px;">
 					<option value="all" <% selected("all", Type) %>>All</option>
 					<option value="progress" <% selected("progress", Type) %>>Progress</option>
 					<option value="info" <% selected("info", Type) %>>Info</option>
 					<option value="error" <% selected("error", Type) %>>Error</option>
+					<option value="crash_report" <% selected("crash_report", Type) %>>Error</option>
 				</select>
 			</td>
 		</tr>
 		<tr>
 			<td>Node:</td>
 			<td>
-				<select multiple size="4" name="node" style="width: 250px;">
-					<% [print_node(atom_to_list(Node0), Node) || Node0 <- [node()|nodes()]] %>
-				</select>
+				<% node_list(Node, [node()|nodes()]) %>
 			</td>
 		</tr>
 		<tr>
@@ -39,6 +38,15 @@
 <%@ selected(Type, Type) %>
 selected="yes"
 <%@ selected(_, _) %>
+
+<%@ node_list(Node, Nodes) when length(Nodes) < 8 %>
+	<% node_list(Node, Nodes, length(Nodes)) %>
+<%@ node_list(Node, Nodes) %>
+	<% node_list(Node, Nodes, 8) %>
+<%@ node_list(Node, Nodes, Size) %>
+<select multiple size="<% integer_to_list(Size) %>" name="node" style="width: 250px;">
+	<% [print_node(atom_to_list(Node0), Node) || Node0 <- Nodes] %>
+</select>
 
 <%@ print_node(Node, Node) %>
 <option value="<% Node %>" selected="yes"><% Node %></option>

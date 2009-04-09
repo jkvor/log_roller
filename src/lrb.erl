@@ -91,11 +91,12 @@ init(_) ->
 handle_call({fetch, Opts}, _From, Cache) ->
 	Max = proplists:get_value(max, Opts, 100),
 	UseCache = proplists:get_value(cache, Opts, true),
+	log_roller_cache:set_cache(Cache),
 	case fetch_internal(Opts, Max, UseCache) of
 		{ok, Results} ->
-			lists:reverse(Results);
-		Err ->
-			Err
+			{reply, lists:reverse(Results), log_roller_cache:get_cache()};
+		{error, Reason} ->
+			{reply, {error, Reason}, Cache}
 	end;
 	
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
@@ -143,20 +144,23 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 fetch_internal(Opts, Max, UseCache) -> 
 	case log_roller_disk_reader:start_continuation(UseCache) of
 		{ok, Cont} -> fetch_internal(Opts, Max, [], Cont);
-		Err -> Err
+		{error, Reason} -> {error, Reason}
 	end.
 
 fetch_internal(_Opts, Max, Acc, _Continuation) when is_integer(Max), length(Acc) >= Max -> {ok, Acc};
 
 fetch_internal(Opts, Max, Acc, Continuation) ->
-	case log_roller_disk_reader:terms(Continuation) of
+	case catch log_roller_disk_reader:terms(Continuation) of
 		{ok, Continuation1, Terms} ->
 			Acc1 = filter(Terms, Opts, Max, Acc),
 			fetch_internal(Opts, Max, Acc1, Continuation1);
 		{error, read_full_cycle} ->
 			{ok, Acc};
 		{error, Reason} ->
-			{error, Reason}
+			{error, Reason};
+		{'EXIT', Error} ->
+			error_logger:error_report({?MODULE, fetch_internal, Error}),
+			{error, Error}
 	end.
 	
 filter([], _Opts, _Max, Acc) -> Acc;
@@ -164,7 +168,6 @@ filter([], _Opts, _Max, Acc) -> Acc;
 filter(_Results, _Opts, Max, Acc) when is_integer(Max), length(Acc) >= Max -> Acc;
 
 filter([{log_entry, Time, Type, Node, Msg}|Tail], Opts, Max, Acc) ->
-	%io:format("filter ~p~n", [{log_entry, Time, Type, Node, Msg}]),
 	Types = proplists:get_all_values(type, Opts),
 	Nodes = proplists:get_all_values(node, Opts),
 	Grep  = 

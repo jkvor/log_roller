@@ -27,11 +27,25 @@
 %% in the shell.
 -module(lrb).
 -author('jacob.vorreuter@gmail.com').
+-behaviour(gen_server).
+
+%% gen_server callbacks
+-export([start_link/0, init/1, handle_call/3, handle_cast/2, 
+		 handle_info/2, terminate/2, code_change/3]).
 
 -export([set_current_file/1, fetch/0, fetch/1]).
 
 -include("log_roller.hrl").
 
+%%====================================================================
+%% API
+%%====================================================================
+
+%% @spec start_link() -> {ok,Pid} | ignore | {error,Error}
+%% @doc start the server
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+    
 set_current_file(Index) ->
 	log_roller_disk_reader:invalidate_cache(Index).
 	
@@ -47,28 +61,98 @@ fetch() -> fetch([]).
 %%		 Result = list(list(Time::string(), Type::atom(), Node::string(), Message::string()))
 %% @doc fetch a list of log entries
 fetch(Opts) when is_list(Opts) ->
+    gen_server:call(?MODULE, {fetch, Opts}).
+    
+%%====================================================================
+%% gen_server callbacks
+%%====================================================================
+
+%%--------------------------------------------------------------------
+%% Function: init(Args) -> {ok, State} |
+%%                         {ok, State, Timeout} |
+%%                         ignore               |
+%%                         {stop, Reason}
+%% Description: Initiates the server
+%% @hidden
+%%--------------------------------------------------------------------
+init(_) ->
+	{ok, dict:new()}.
+
+%%--------------------------------------------------------------------
+%% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
+%%                                      {reply, Reply, State, Timeout} |
+%%                                      {noreply, State} |
+%%                                      {noreply, State, Timeout} |
+%%                                      {stop, Reason, Reply, State} |
+%%                                      {stop, Reason, State}
+%% Description: Handling call messages
+%% @hidden
+%%--------------------------------------------------------------------
+handle_call({fetch, Opts}, _From, Cache) ->
 	Max = proplists:get_value(max, Opts, 100),
 	UseCache = proplists:get_value(cache, Opts, true),
-	case fetch(Opts, Max, UseCache) of
+	case fetch_internal(Opts, Max, UseCache) of
 		{ok, Results} ->
 			lists:reverse(Results);
 		Err ->
 			Err
-	end.
+	end;
+	
+handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 
-fetch(Opts, Max, UseCache) -> 
+%%--------------------------------------------------------------------
+%% Function: handle_cast(Msg, State) -> {noreply, State} |
+%%                                      {noreply, State, Timeout} |
+%%                                      {stop, Reason, State}
+%% Description: Handling cast messages
+%% @hidden
+%%--------------------------------------------------------------------
+handle_cast(_Message, State) -> {noreply, State}.
+
+%%--------------------------------------------------------------------
+%% Function: handle_info(Info, State) -> {noreply, State} |
+%%                                       {noreply, State, Timeout} |
+%%                                       {stop, Reason, State}
+%% Description: Handling all non call/cast messages
+%% @hidden
+%%--------------------------------------------------------------------	
+handle_info(_Info, State) -> io:format("info: ~p~n", [_Info]), {noreply, State}.
+
+%%--------------------------------------------------------------------
+%% Function: terminate(Reason, State) -> void()
+%% Description: This function is called by a gen_server when it is about to
+%% terminate. It should be the opposite of Module:init/1 and do any necessary
+%% cleaning up. When it returns, the gen_server terminates with Reason.
+%% The return value is ignored.
+%% @hidden
+%%--------------------------------------------------------------------
+terminate(_Reason, _State) -> 
+	ok.
+	
+%%--------------------------------------------------------------------
+%% Func: code_change(OldVsn, State, Extra) -> {ok, NewState}
+%% Description: Convert process state when code is changed
+%% @hidden
+%%--------------------------------------------------------------------
+code_change(_OldVsn, State, _Extra) -> {ok, State}.
+
+%%--------------------------------------------------------------------
+%%% Internal functions
+%%--------------------------------------------------------------------
+
+fetch_internal(Opts, Max, UseCache) -> 
 	case log_roller_disk_reader:start_continuation(UseCache) of
-		{ok, Cont} -> fetch(Opts, Max, [], Cont);
+		{ok, Cont} -> fetch_internal(Opts, Max, [], Cont);
 		Err -> Err
 	end.
 
-fetch(_Opts, Max, Acc, _Continuation) when is_integer(Max), length(Acc) >= Max -> {ok, Acc};
+fetch_internal(_Opts, Max, Acc, _Continuation) when is_integer(Max), length(Acc) >= Max -> {ok, Acc};
 
-fetch(Opts, Max, Acc, Continuation) ->
+fetch_internal(Opts, Max, Acc, Continuation) ->
 	case log_roller_disk_reader:terms(Continuation) of
 		{ok, Continuation1, Terms} ->
 			Acc1 = filter(Terms, Opts, Max, Acc),
-			fetch(Opts, Max, Acc1, Continuation1);
+			fetch_internal(Opts, Max, Acc1, Continuation1);
 		{error, read_full_cycle} ->
 			{ok, Acc};
 		{error, Reason} ->

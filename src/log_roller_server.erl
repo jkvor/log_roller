@@ -95,7 +95,7 @@ total_writes() ->
 init(_) ->
 	{ok, {{one_for_one, 10, 10}, [
 	    {log_roller_disk_logger, {log_roller_disk_logger, start_link, []}, permanent, 5000, worker, [log_roller_disk_logger]},
-		{log_roller_cache, {log_roller_cache, start_link, []}, permanent, 5000, worker, [log_roller_cache]}
+		{lrb, {lrb, start_link, []}, permanent, 5000, worker, [lrb]}
 	]}}.
 
 %% @hidden

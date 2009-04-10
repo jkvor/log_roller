@@ -72,7 +72,7 @@ display(QS) ->
 						proplists:get_value("grep", QS, "")}),
 			Content = lr_logs:render({data, ?TOOL_BASE_URL, List}),
 			lr_frame:render({data, ?TOOL_BASE_URL, [Header, Content]});
-		Err ->
+		{'EXIT', Err} ->
 			error_logger:error_report({?MODULE, display, Err}),
-            "Error Encountered"
+            lists:flatten(io_lib:format("~p~n", [Err]))
 	end.

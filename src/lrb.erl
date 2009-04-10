@@ -61,7 +61,7 @@ fetch() -> fetch([]).
 %%		 Result = list(list(Time::string(), Type::atom(), Node::string(), Message::string()))
 %% @doc fetch a list of log entries
 fetch(Opts) when is_list(Opts) ->
-    gen_server:call(?MODULE, {fetch, Opts}).
+    gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), {fetch, Opts}, 10000).
     
 %%====================================================================
 %% gen_server callbacks
@@ -76,6 +76,9 @@ fetch(Opts) when is_list(Opts) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init(_) ->
+    process_flag(trap_exit, true),
+    ok = pg2:create(log_roller_browser_grp),
+    ok = pg2:join(log_roller_browser_grp, self()),
 	{Maxbytes, _} = proplists:get_value(size, log_roller_disk_logger:options(), {65536, 0}),
 	{ok, log_roller_cache:start(Maxbytes)}.
 

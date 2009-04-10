@@ -5,7 +5,7 @@
 		<tr>
 			<td>Type:</td>
 			<td>
-				<select multiple size="5" name="type" style="width: 250px;">
+				<select multiple size="5" name="type" style="width: 350px;">
 					<option value="all" <% selected("all", Type) %>>All</option>
 					<option value="progress" <% selected("progress", Type) %>>Progress</option>
 					<option value="info" <% selected("info", Type) %>>Info</option>
@@ -22,11 +22,11 @@
 		</tr>
 		<tr>
 			<td>Grep:&nbsp;&nbsp;</td>
-			<td><input type="text" name="grep" value="<% Grep %>" style="width: 250px;"/></td>
+			<td><input type="text" name="grep" value="<% Grep %>" style="width: 350px;"/></td>
 		</tr>
 		<tr>
 			<td>Max:</td>
-			<td><input type="text" name="max" value="<% Max %>" style="width: 250px;"/></td>
+			<td><input type="text" name="max" value="<% Max %>" style="width: 350px;"/></td>
 		</tr>
 		<tr>
 			<td></td>
@@ -44,7 +44,7 @@ selected="yes"
 <%@ node_list(Node, Nodes) %>
 	<% node_list(Node, Nodes, 8) %>
 <%@ node_list(Node, Nodes, Size) %>
-<select multiple size="<% integer_to_list(Size) %>" name="node" style="width: 250px;">
+<select multiple size="<% integer_to_list(Size) %>" name="node" style="width: 350px;">
 	<% [print_node(atom_to_list(Node0), Node) || Node0 <- Nodes] %>
 </select>
 

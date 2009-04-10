@@ -76,7 +76,8 @@ fetch(Opts) when is_list(Opts) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init(_) ->
-	{ok, dict:new()}.
+	{Maxbytes, _} = proplists:get_value(size, log_roller_disk_logger:options(), {65536, 0}),
+	{ok, log_roller_cache:start(Maxbytes)}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -91,10 +92,10 @@ init(_) ->
 handle_call({fetch, Opts}, _From, Cache) ->
 	Max = proplists:get_value(max, Opts, 100),
 	UseCache = proplists:get_value(cache, Opts, true),
-	log_roller_cache:set_cache(Cache),
+	log_roller_cache:store_cache(Cache),
 	case fetch_internal(Opts, Max, UseCache) of
 		{ok, Results} ->
-			{reply, lists:reverse(Results), log_roller_cache:get_cache()};
+			{reply, lists:reverse(Results), log_roller_cache:fetch_cache()};
 		{error, Reason} ->
 			{reply, {error, Reason}, Cache}
 	end;

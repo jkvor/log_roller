@@ -84,13 +84,13 @@ terms(Cont) ->
 	
 %% lookup cache frames by the key {Index, Pos} and delete
 invalidate_cache_frame(Index, Pos) when Pos >= 0 ->
-	log_roller_cache:delete({Index, Pos}),
+	log_roller_cache:delete(key({Index, Pos})),
 	invalidate_cache_frame(Index, Pos-?MAX_CHUNK_SIZE);
 	
 invalidate_cache_frame(_, _) -> ok.
 
 %% @spec read_chunk(Cont) -> {ok, Cont1, Terms} | {error, any()}
-%% read a chunk either from cache or file
+%% @doc read a chunk either from cache or file
 %%	def chunk - a block of binary data containing erlang tuples (log_entry records)
 read_chunk(#continuation{properties=Props, state=State}=Cont) ->
     CacheFrame = get_cache_frame(Props#cprops.use_cache, State#cstate.index, State#cstate.position),
@@ -100,7 +100,7 @@ read_chunk(#continuation{properties=Props, state=State}=Cont) ->
     end.
     
 %% @spec get_cache_frame(UseCache, Index, Pos) -> cache_entry() | undefined
-%% fetch the cache frame for the {Index,Pos} key
+%% @doc fetch the cache frame for the {Index,Pos} key
 get_cache_frame(false, _, _) -> undefined;
 get_cache_frame(true, Index, Pos) ->
     IsCurrent = is_current_location(Index, Pos),
@@ -109,9 +109,9 @@ get_cache_frame(true, Index, Pos) ->
 		    %% ignore cache for the frame being written to currently
 			undefined;
 		true ->
-			case log_roller_cache:get({Index, Pos}) of
+			case log_roller_cache:get(key({Index, Pos})) of
 				undefined -> undefined; %% cache frame does not exist
-				CacheEntry -> CacheEntry
+				CacheEntry -> binary_to_term(CacheEntry)
 			end
 	end.
 	
@@ -141,7 +141,7 @@ read_chunk_from_file(#continuation{state=State}=Cont) ->
 				    Pos = State#cstate.position,
 				    State1 = State#cstate{last_timestamp=LTimestamp1, binary_remainder=BinRem1},
 				    Cont1 = Cont#continuation{state=State1},
-					log_roller_cache:put({Index, Pos}, {cache_entry, State1, Terms}),
+					log_roller_cache:put(key({Index, Pos}), term_to_binary({cache_entry, State1, Terms})),
 					{ok, Cont1, Terms};
 				{error, Reason} ->
 					{error, Reason}
@@ -180,13 +180,13 @@ file_handle(FileName) ->
 		undefined ->
 			case file:open(FileName, [read]) of
 				{ok, IoDevice} ->
-					log_roller_cache:put(FileName, IoDevice),
+					log_roller_cache:put(FileName, term_to_binary(IoDevice)),
 					{ok, IoDevice};
 				{error, Reason} ->
 					{error, Reason}
 			end;
 		IoDevice ->
-			{ok, IoDevice}
+			{ok, binary_to_term(IoDevice)}
 	end.
 		
 rewind_location(#continuation{properties=Props, state=State}=Cont) ->
@@ -288,3 +288,8 @@ is_full_cycle({A1,B1,C1}, {A2,B2,C2}) ->
 		A1 > A2 -> true;
 		true -> false
 	end.
+	
+key({A, B}) when is_integer(A), is_integer(B) -> 
+	lists:flatten(io_lib:format("~w_~w", [A,B]));
+key(_) ->
+	{error, unexpected_key}.

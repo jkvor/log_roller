@@ -24,33 +24,35 @@
 -author('jacob.vorreuter@gmail.com').
 
 %% API exports
--export([set_cache/1, get_cache/0]).
--export([get/1, put/2, delete/1]).
+-export([start/1, store_cache/1, fetch_cache/0, get/1, put/2, delete/1]).
 
 %% @spec start() -> Cache
 %%		 Cache = cherly_cache()
-start() -> 
+start(_) -> 
 	dict:new().
 	
-set_cache(Cache) -> 
+store_cache(Cache) -> 
 	erlang:put(log_roller_cache, Cache).
 	
-get_cache() ->
+fetch_cache() ->
 	erlang:get(log_roller_cache).
 	
-%% @spec get(any()) -> undefined | any()
-get(Key) ->
-	case dict:find(Key, get_cache()) of
+%% @spec get(string()) -> undefined | any()
+get(Key) when is_list(Key) ->
+	case dict:find(Key, fetch_cache()) of
 		error -> undefined;
 		{ok, Val} -> Val
 	end.
 	
-%% @spec put(any(), any()) -> ok
-put(Key, Val) ->
-	set_cache(dict:store(Key, Val, get_cache())),
+%% @spec put(list(), binary()) -> ok
+put(Key, Val) when is_list(Key), is_binary(Val) ->
+	store_cache(dict:store(Key, Val, fetch_cache())),
 	ok.
 
-%% @spec delete(any()) -> ok
-delete(Key) ->
-	set_cache(dict:erase(Key, get_cache())),
+put(_, _) ->
+	{error, cache_value_must_be_binary}.
+
+%% @spec delete(string()) -> ok
+delete(Key) when is_list(Key) ->
+	store_cache(dict:erase(Key, fetch_cache())),
 	ok.

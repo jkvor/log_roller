@@ -151,7 +151,7 @@ read_chunk_from_file(#continuation{state=State}=Cont) ->
 	end.
 	
 read_chunk_from_cache(#continuation{state=State}=Cont, CacheEntry) ->
-    io:format("read from cache {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
+    %io:format("read from cache {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
     CacheState = CacheEntry#cache_entry.cstate,
     LTimestamp = CacheState#cstate.last_timestamp,
 	BinRem = CacheState#cstate.binary_remainder,
@@ -159,7 +159,7 @@ read_chunk_from_cache(#continuation{state=State}=Cont, CacheEntry) ->
 	{ok, Cont#continuation{state=State1}, CacheEntry#cache_entry.terms}.
 	
 read_file(#continuation{properties=Props, state=State}) ->
-    io:format("read from file {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
+    %io:format("read from file {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
 	FileName = lists:flatten(io_lib:format("~s.~w", [Props#cprops.file_stub, State#cstate.index])),
 	case file_handle(FileName) of
 		{ok, IoDevice} ->

@@ -24,13 +24,13 @@
 -module(log_roller_disk_reader).
 -author('jacob.vorreuter@gmail.com').
 
--export([start_continuation/1, invalidate_cache/1, terms/1]).
+-export([start_continuation/3, invalidate_cache/3, terms/1]).
 
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
 
--record(cprops, {file_stub, chunk_size, size_limit, max_index, use_cache}).
--record(cstate, {index, position, last_timestamp, binary_remainder}).
+-record(cprops, {server_name, file_stub, chunk_size, size_limit, max_index, use_cache}).
+-record(cstate, {index, position, last_timestamp, binary_remainder, cache}).
 -record(continuation, {properties, state}).
 -record(cache_entry, {cstate, terms}).
 		
@@ -38,23 +38,23 @@
 %% API
 %%====================================================================
 
-%% @spec start_continuation(true | false) -> {ok, continuation()} | {error, string()}
+%% @spec start_continuation(atom(), {cherly, post()}, true | false) -> {ok, continuation()} | {error, string()}
 %% @doc fetch a continuation pointed to the log frame currently being written to
-start_continuation(UseCache) ->
-	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(),
+start_continuation(ServerName, Cache, UseCache) ->
+	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(ServerName),
 	StartPos = snap_to_grid(Pos),
 	ChunkSize = Pos-StartPos,
-	Props = {cprops, FileStub, ChunkSize, SizeLimit, MaxIndex, UseCache},
-	State = {cstate, Index, StartPos, {9999,0,0}, <<>>},
+	Props = {cprops, ServerName, FileStub, ChunkSize, SizeLimit, MaxIndex, UseCache},
+	State = {cstate, Index, StartPos, {9999,0,0}, <<>>, Cache},
 	{ok, {continuation, Props, State}}.
 
-%% @spec invalidate_cache(Index) -> ok | {error, string()}
+%% @spec invalidate_cache(atom(), {cherly, port()}, Index) -> ok | {error, string()}
 %% @doc remove all cache entries that point to the file ending in Index
-invalidate_cache(Index) ->
-	Opts = log_roller_disk_logger:options(),
+invalidate_cache(ServerName, Cache, Index) ->
+	Opts = log_roller_disk_logger:options(ServerName),
 	{SizeLimit, _} = proplists:get_value(size, Opts),
 	Pos = snap_to_grid(SizeLimit),
-	invalidate_cache_frame(Index, Pos).
+	invalidate_cache_frame(Cache, Index, Pos).
 
 %% @spec terms(Cont) -> {ok, Cont1, Terms} | {error, any()}	
 %%		 Cont = continuation()
@@ -83,43 +83,45 @@ terms(Cont) ->
 %%--------------------------------------------------------------------
 	
 %% lookup cache frames by the key {Index, Pos} and delete
-invalidate_cache_frame(Index, Pos) when Pos >= 0 ->
-	log_roller_cache:delete(key({Index, Pos})),
-	invalidate_cache_frame(Index, Pos-?MAX_CHUNK_SIZE);
+invalidate_cache_frame(Cache, Index, Pos) when Pos >= 0 ->
+	log_roller_cache:delete(Cache, key({Index, Pos})),
+	invalidate_cache_frame(Cache, Index, Pos-?MAX_CHUNK_SIZE);
 	
-invalidate_cache_frame(_, _) -> ok.
+invalidate_cache_frame(_, _, _) -> ok.
 
 %% @spec read_chunk(Cont) -> {ok, Cont1, Terms} | {error, any()}
 %% @doc read a chunk either from cache or file
 %%	def chunk - a block of binary data containing erlang tuples (log_entry records)
 read_chunk(#continuation{properties=Props, state=State}=Cont) ->
-    CacheFrame = get_cache_frame(Props#cprops.use_cache, State#cstate.index, State#cstate.position),
+    CacheFrame = get_cache_frame(Props#cprops.server_name, State#cstate.cache, Props#cprops.use_cache, State#cstate.index, State#cstate.position),
     case CacheFrame of
         undefined -> read_chunk_from_file(Cont);
         _ -> read_chunk_from_cache(Cont, CacheFrame)
     end.
     
-%% @spec get_cache_frame(UseCache, Index, Pos) -> cache_entry() | undefined
+%% @spec get_cache_frame(ServerName, UseCache, Index, Pos) -> cache_entry() | undefined
 %% @doc fetch the cache frame for the {Index,Pos} key
-get_cache_frame(false, _, _) -> undefined;
-get_cache_frame(true, Index, Pos) ->
-    IsCurrent = is_current_location(Index, Pos),
+get_cache_frame(_, _, false, _, _) -> undefined;
+get_cache_frame(ServerName, Cache, true, Index, Pos) ->
+    IsCurrent = is_current_location(ServerName, Index, Pos),
     if
 		IsCurrent -> 
 		    %% ignore cache for the frame being written to currently
 			undefined;
 		true ->
-			case log_roller_cache:get(key({Index, Pos})) of
+			case log_roller_cache:get(Cache, key({Index, Pos})) of
 				undefined -> undefined; %% cache frame does not exist
-				CacheEntry -> binary_to_term(CacheEntry)
+				CacheEntry -> 
+					io:format("got from cache: ~p~n", [{Index, Pos}]),
+					binary_to_term(CacheEntry)
 			end
 	end.
 	
 %% Fetch the current location from the disk logger.
 %% If {Index,Pos} is inside the frame currently being
 %% written to then return true, otherwise, false
-is_current_location(Index, Pos) ->
-    {_, CurrIndex, CurrPos, _, _} = log_roller_disk_logger:current_location(),
+is_current_location(ServerName, Index, Pos) ->
+    {_, CurrIndex, CurrPos, _, _} = log_roller_disk_logger:current_location(ServerName),
     if
 		Index == CurrIndex ->
 			A = snap_to_grid(Pos),
@@ -141,7 +143,7 @@ read_chunk_from_file(#continuation{state=State}=Cont) ->
 				    Pos = State#cstate.position,
 				    State1 = State#cstate{last_timestamp=LTimestamp1, binary_remainder=BinRem1},
 				    Cont1 = Cont#continuation{state=State1},
-					log_roller_cache:put(key({Index, Pos}), term_to_binary({cache_entry, State1, Terms})),
+					log_roller_cache:put(State#cstate.cache, key({Index, Pos}), term_to_binary({cache_entry, State1, Terms})),
 					{ok, Cont1, Terms};
 				{error, Reason} ->
 					{error, Reason}
@@ -161,7 +163,7 @@ read_chunk_from_cache(#continuation{state=State}=Cont, CacheEntry) ->
 read_file(#continuation{properties=Props, state=State}) ->
     %io:format("read from file {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
 	FileName = lists:flatten(io_lib:format("~s.~w", [Props#cprops.file_stub, State#cstate.index])),
-	case file_handle(FileName) of
+	case file_handle(State#cstate.cache, FileName) of
 		{ok, IoDevice} ->
 			case file:pread(IoDevice, State#cstate.position, Props#cprops.chunk_size) of
 				{ok, Chunk} -> 
@@ -175,12 +177,12 @@ read_file(#continuation{properties=Props, state=State}) ->
 			{error, Reason}
 	end.
 	
-file_handle(FileName) ->
-	case log_roller_cache:get(FileName) of
+file_handle(Cache, FileName) ->
+	case log_roller_cache:get(Cache, FileName) of
 		undefined ->
 			case file:open(FileName, [read]) of
 				{ok, IoDevice} ->
-					log_roller_cache:put(FileName, term_to_binary(IoDevice)),
+					log_roller_cache:put(Cache, FileName, term_to_binary(IoDevice)),
 					{ok, IoDevice};
 				{error, Reason} ->
 					{error, Reason}

@@ -24,35 +24,41 @@
 -author('jacob.vorreuter@gmail.com').
 
 %% API exports
--export([start/1, store_cache/1, fetch_cache/0, get/1, put/2, delete/1]).
+-export([start/1, get/2, put/3, delete/2]).
 
-%% @spec start() -> Cache
+%% @spec start(CacheSizeInBytes) -> Cache
+%%		 CacheSizeInBytes = integer()
 %%		 Cache = cherly_cache()
-start(_) -> 
-	dict:new().
-	
-store_cache(Cache) -> 
-	erlang:put(log_roller_cache, Cache).
-	
-fetch_cache() ->
-	erlang:get(log_roller_cache).
+start(CacheSizeInBytes) ->
+	{ok, C} = cherly:start(CacheSizeInBytes), C.
 	
 %% @spec get(string()) -> undefined | any()
-get(Key) when is_list(Key) ->
-	case dict:find(Key, fetch_cache()) of
-		error -> undefined;
-		{ok, Val} -> Val
+get(Cache, Key) when is_tuple(Cache), is_list(Key) ->
+	case cherly:get(Cache, Key) of
+		not_found -> 
+			undefined;
+		{ok, Value} -> 
+			Value
 	end.
-	
+		
 %% @spec put(list(), binary()) -> ok
-put(Key, Val) when is_list(Key), is_binary(Val) ->
-	store_cache(dict:store(Key, Val, fetch_cache())),
-	ok;
+put(Cache, Key, Val) when is_tuple(Cache), is_list(Key), is_binary(Val) ->
+	case cherly:put(Cache, Key, Val) of
+		true ->
+			ok;
+		Err ->
+			io:format("failed to place in cache ~p: ~p~n", [Key, Err]),
+			{error, cache_put_failed}
+	end;
 
-put(_, _) ->
+put(_, _, _) ->
 	{error, cache_value_must_be_binary}.
 
 %% @spec delete(string()) -> ok
-delete(Key) when is_list(Key) ->
-	store_cache(dict:erase(Key, fetch_cache())),
-	ok.
+delete(Cache, Key) when is_tuple(Cache), is_list(Key) ->
+	case cherly:remove(Cache, Key) of
+		true ->
+			ok;
+		_ ->
+			{error, cache_remove_failed}
+	end.

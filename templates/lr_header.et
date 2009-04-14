@@ -1,16 +1,18 @@
-<%? {data, Prefix, Max, Type, Node, Grep} = Data %>
+<%? {data, Prefix, ServerName, ServerNames, Max, Type, Node, Grep} = Data %>
 <div id="header">
-<form method="get" action="<% Prefix %>/logs">
+<div id="tab_bar">
+	<br/>
+	<% [tabs(Prefix, ServerName, atom_to_list(ServerName1)) || ServerName1 <- [all|ServerNames]] %>
+</div>
+<form method="get" action="<% Prefix %>/server/<% ServerName %>">
 	<table>
 		<tr>
 			<td>Type:</td>
 			<td>
-				<select multiple size="5" name="type" style="width: 350px;">
-					<option value="all" <% selected("all", Type) %>>All</option>
+				<select multiple size="3" name="type" style="width: 350px;">
 					<option value="progress" <% selected("progress", Type) %>>Progress</option>
 					<option value="info" <% selected("info", Type) %>>Info</option>
 					<option value="error" <% selected("error", Type) %>>Error</option>
-					<option value="crash_report" <% selected("crash_report", Type) %>>Crash Report</option>
 				</select>
 			</td>
 		</tr>
@@ -35,6 +37,11 @@
 	</table>
 </form>
 </div>
+<%@ tabs(Prefix, ServerName, ServerName) %>
+<div class="active_tab"><a class="tab_link"><% ServerName %></a></div>
+<%@ tabs(Prefix, _, ServerName) %>
+<div class="tab"><a class="tab_link" href="<% Prefix %>/server/<% ServerName %>"><% ServerName %></a></div>
+
 <%@ selected(Type, Type) %>
 selected="yes"
 <%@ selected(_, _) %>

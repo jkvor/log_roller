@@ -5,6 +5,7 @@
         log_roller_server,
 		log_roller_disk_logger,
 		log_roller_cache,
+		log_roller_filter,
 		lrb,
 		log_roller_webtool
     ]},

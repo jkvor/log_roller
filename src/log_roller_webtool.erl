@@ -24,7 +24,7 @@
 %% @doc A webtool module that provides a user interface for log browsing
 -module(log_roller_webtool).
 
--export([compile_templates/0, config_data/0, index/2, logs/2]).
+-export([compile_templates/0, config_data/0, server/2]).
 
 -define(TOOL_BASE_URL, "/log_roller/log_roller_webtool").
 
@@ -37,35 +37,41 @@ compile_templates() ->
 %% @spec config_data() -> {log_roller, Args::list()}
 %% @doc fetch config data for loading module in webtool
 config_data() ->
-	{log_roller, [{web_data,{"log_roller", ?TOOL_BASE_URL ++ "/index"}}, 
+	{log_roller, [{web_data,{"log_roller", ?TOOL_BASE_URL ++ "/server/all"}}, 
 			 {alias,{erl_alias,"/log_roller",[log_roller_webtool]}}
 			]}.
 
 %% @spec index(Env::list(), Input::list()) -> binary()
 %% @doc the index function displays the default log view
-index(_Env,_Input) ->
-	display([{"max", "20"}]).
-
-%% @spec logs(Env::list(), Input::list()) -> binary()
-%% @doc query the log browser with custom args
-logs(_Env, Input) ->
-	display(httpd:parse_query(Input)).
-	
-display(QS) ->
-	io:format("webtool display: ~p~n", [QS]),
-	Opts = lists:foldl(
-		fun ({_, ""}, Acc0) -> Acc0;
-			({"max",Val}, Acc0) -> [{max, list_to_integer(Val)}|Acc0];
-			({"type",Val}, Acc0) -> [{type, list_to_atom(Val)}|Acc0];
-			({"node",Val}, Acc0) -> [{node, Val}|Acc0];
-			({Key,Val}, Acc0) -> [{list_to_atom(Key), Val}|Acc0]
-		end, [], QS),
+server(_Env, Input) ->
+	case string:tokens(Input, "?") of
+		[ServerName] ->
+			display([{"max", "20"}], ServerName);
+		[ServerName, QS] ->
+			display(httpd:parse_query(QS), ServerName)
+	end.
 		
+display(QS, ServerName) ->
+	io:format("webtool display: ~p~n", [QS]),
+	Opts0 = lists:foldl(
+		fun ({_, []}, Dict) ->
+				Dict;
+			({Key,Val}, Dict) ->
+				Key1 = dict_key(Key),
+				Val1 = dict_val(Key1, Val),
+				case dict:is_key(Key1, Dict) of
+					true ->
+						dict:append_list(Key1, Val1, Dict);
+					false ->
+						dict:store(Key1, Val1, Dict)
+				end
+		end, dict:new(), QS),
+	Opts = dict:to_list(Opts0),
 	io:format("options: ~p~n", [Opts]),
-	case (catch lrb:fetch(Opts)) of
+	case (catch lrb:fetch(list_to_atom(ServerName), Opts)) of
 		List when is_list(List) ->
 			%io:format("fetch success: ~p~n", [List]),
-			Header = lr_header:render({data, ?TOOL_BASE_URL, 
+			Header = lr_header:render({data, ?TOOL_BASE_URL, ServerName, lrb:disk_logger_names(),
 						proplists:get_value("max", QS, ""), 
 						proplists:get_value("type", QS, "all"), 
 						proplists:get_value("node", QS, ""),
@@ -76,3 +82,17 @@ display(QS) ->
 			error_logger:error_report({?MODULE, display, Err}),
             lists:flatten(io_lib:format("~p~n", [Err]))
 	end.
+	
+dict_key("max") -> max;
+dict_key("type") -> types;
+dict_key("node") -> nodes;
+dict_key("grep") -> grep.
+
+dict_val(max, Val) -> 
+	case (catch list_to_integer(Val)) of
+		{'EXIT', _} -> 0;
+		Int -> Int
+	end;
+dict_val(types, Val) -> [list_to_atom(Val), list_to_atom(Val ++ "_report")];
+dict_val(nodes, Val) -> [list_to_atom(Val)];
+dict_val(grep, Val) -> Val.

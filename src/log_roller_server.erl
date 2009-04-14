@@ -27,8 +27,10 @@
 -export([
 	start/2, stop/1, init/1, start_phase/3, 
 	start_webtool/0, start_webtool/3, total_writes/0,
-	discover/0, reload/0, build_rel/0
-	]).
+	reload/0, build_rel/0
+]).
+
+-include("log_roller.hrl").
 	
 %%%
 %%% Application API
@@ -93,11 +95,85 @@ total_writes() ->
 
 %% @hidden
 init(_) ->
-	{ok, {{one_for_one, 10, 10}, [
-	    {log_roller_disk_logger, {log_roller_disk_logger, start_link, []}, permanent, 5000, worker, [log_roller_disk_logger]},
-		{lrb, {lrb, start_link, []}, permanent, 5000, worker, [lrb]}
-	]}}.
+	ok = application:unset_env(?MODULE, disk_loggers),
+	ok = application:unset_env(?MODULE, subscriptions),
+	DiskLoggers = get_disk_loggers_from_config(),
+	ok = application:set_env(?MODULE, disk_loggers, DiskLoggers),
+	DiskLoggerChildren =
+		[begin
+			{DiskLogger#disk_logger.server_name, {log_roller_disk_logger, start_link, [DiskLogger]}, permanent, 5000, worker, [log_roller_disk_logger]}
+		 end || DiskLogger <- DiskLoggers],
+	Lrb = {lrb, {lrb, start_link, [DiskLoggers]}, permanent, 5000, worker, [lrb]}, 
+	{ok, {{one_for_one, 10, 10}, 
+		lists:reverse([Lrb | DiskLoggerChildren])
+	}}.
+	
+%% {disk_logger, Name::atom(), Nodes::[node()], Filters::[{atom(), any()}], LogDir::string(), MaxBytes::integer(), MaxFiles::integer()}
+get_disk_loggers_from_config() ->
+	case proplists:delete(included_applications, application:get_all_env(log_roller_server)) of
+		[] ->
+			[#disk_logger{server_name=server_name(default)}];
+		Envs ->
+			get_disk_loggers_from_config(Envs, [])
+	end.
 
+get_disk_loggers_from_config([], Loggers) -> Loggers;
+	
+get_disk_loggers_from_config([{log_dir, LogDir}|Tail], Loggers) when is_list(LogDir) ->
+	{Logger, Loggers1} = get_default_logger(Loggers),
+	Loggers2 = [Logger#disk_logger{log_dir=LogDir}|Loggers1],
+	get_disk_loggers_from_config(Tail, Loggers2);
+
+get_disk_loggers_from_config([{filters, Filters}|Tail], Loggers) when is_list(Filters) ->
+	{Logger, Loggers1} = get_default_logger(Loggers),
+	Loggers2 = [Logger#disk_logger{filters=Filters}|Loggers1],
+	get_disk_loggers_from_config(Tail, Loggers2);
+		
+get_disk_loggers_from_config([{cache_size, CacheSize}|Tail], Loggers) when is_integer(CacheSize) ->
+	{Logger, Loggers1} = get_default_logger(Loggers),
+	Loggers2 = [Logger#disk_logger{cache_size=CacheSize}|Loggers1],
+	get_disk_loggers_from_config(Tail, Loggers2);
+		
+get_disk_loggers_from_config([{maxbytes, Maxbytes}|Tail], Loggers) when is_integer(Maxbytes) ->
+	{Logger, Loggers1} = get_default_logger(Loggers),
+	Loggers2 = [Logger#disk_logger{maxbytes=Maxbytes}|Loggers1],
+	get_disk_loggers_from_config(Tail, Loggers2);
+	
+get_disk_loggers_from_config([{maxfiles, Maxfiles}|Tail], Loggers) when is_integer(Maxfiles) ->
+	{Logger, Loggers1} = get_default_logger(Loggers),
+	Loggers2 = [Logger#disk_logger{maxfiles=Maxfiles}|Loggers1],
+	get_disk_loggers_from_config(Tail, Loggers2);
+	
+get_disk_loggers_from_config([{Custom, Args}|Tail], Loggers) when is_atom(Custom), is_list(Args) ->	
+	Fields = record_info(fields, disk_logger),
+	Index = [I+1 || I <- lists:seq(1, length(Fields))],
+	Ref = lists:zip(Fields, Index),
+	Logger = populate_disk_logger_fields(#disk_logger{name=Custom, server_name=server_name(Custom)}, [filters, log_dir, cache_size, maxbytes, maxfiles], Args, Ref),
+	get_disk_loggers_from_config(Tail, [Logger|Loggers]).
+
+get_default_logger(Loggers) ->
+	case lists:keytake(default, 2, Loggers) of
+		{value, Default, Loggers1} ->
+			{Default, Loggers1};
+		false ->
+			{#disk_logger{server_name=server_name(default)}, Loggers}
+	end.
+
+populate_disk_logger_fields(Logger, [], _, _) -> Logger;
+
+populate_disk_logger_fields(Logger, [Field|Tail], Args, Ref) ->
+	case proplists:get_value(Field, Args) of
+		undefined ->
+			populate_disk_logger_fields(Logger, Tail, Args, Ref);
+		Value ->
+			Index = proplists:get_value(Field, Ref),
+			Logger1 = erlang:setelement(Index, Logger, Value),
+			populate_disk_logger_fields(Logger1, Tail, Args, Ref)
+	end.
+
+server_name(Name) ->
+	list_to_atom("log_roller_disk_logger_" ++ atom_to_list(Name)).
+	
 %% @hidden
 start_phase(pg2, _, _) ->
     pg2:which_groups(),
@@ -107,16 +183,45 @@ start_phase(pg2, _, _) ->
 start_phase(world, _, _) ->
 	net_adm:world(),
 	ok;
-
+	
 %% @hidden
 start_phase(discovery, _, _) ->
-	spawn_link(fun discover/0),
+	{ok, DiskLoggers} = application:get_env(?MODULE, disk_loggers),
+	Subscriptions = determine_subscriptions(DiskLoggers, [node()|nodes()], []),
+	ok = application:set_env(?MODULE, subscriptions, Subscriptions),
+	spawn(fun() -> register_as_subscriber(Subscriptions) end),
 	ok.
-	
-discover() ->
-	[log_roller_disk_logger:subscribe_to(Node) || Node <- [node()|nodes()]],
+
+determine_subscriptions([], _, Acc) -> Acc;
+
+determine_subscriptions([DiskLogger|Tail], Nodes, Acc) when is_record(DiskLogger, disk_logger), is_list(Nodes) ->
+	Acc1 =
+		case proplists:get_value(nodes, DiskLogger#disk_logger.filters, []) of
+			[] ->
+				[{DiskLogger, Nodes}|Acc];
+			_ ->
+				case get_matching_nodes(DiskLogger, Nodes) of
+					[] ->
+						Acc;
+					Matches ->
+						[{DiskLogger, Matches}|Acc]
+				end
+		end,
+	determine_subscriptions(Tail, Nodes, Acc1).	
+		
+get_matching_nodes(DiskLogger, Nodes) ->
+	DiskLoggerNodes = proplists:get_value(nodes, DiskLogger#disk_logger.filters),
+	lists:filter(fun(Node) -> lists:member(Node, DiskLoggerNodes) end, Nodes).
+
+%% send a subscribe message to all connected nodes
+register_as_subscriber(Subscriptions) ->
+	[begin
+		[begin
+			log_roller_disk_logger:register_as_subscriber_with(DiskLogger#disk_logger.server_name, Node)
+		 end || Node <- Nodes]
+	 end || {DiskLogger, Nodes} <- Subscriptions],	
 	timer:sleep(360000),
-	discover().
+	register_as_subscriber(Subscriptions).
 
 reload() ->
 	{ok, Modules} = application_controller:get_key(?MODULE, modules),

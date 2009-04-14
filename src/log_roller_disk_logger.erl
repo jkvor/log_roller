@@ -26,19 +26,15 @@
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/0, init/1, handle_call/3, handle_cast/2, 
+-export([start_link/1, init/1, handle_call/3, handle_cast/2, 
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([reload/0, sync/0, subscribe_to/1, ping/0, total_writes/0, current_location/0, options/0]).
+-export([sync/1, register_as_subscriber_with/2, ping/1, total_writes/1, current_location/1, options/1]).
 
 -include("log_roller.hrl").
 
--record(state, {log, args, total_writes}).
-
--define(DEFAULT_MAXBYTES, 10485760).
--define(DEFAULT_MAXFILES, 10).
--define(LOG_NAME, log_roller_data).
+-record(state, {log, args, server_name, filters, total_writes}).
 
 %%====================================================================
 %% API
@@ -46,37 +42,48 @@
 
 %% @spec start_link() -> {ok,Pid} | ignore | {error,Error}
 %% @doc start the server
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
-%% @spec reload() -> ok
-%% @doc reload using config values
-reload() ->
-	gen_server:call(?MODULE, reload).
+start_link(DiskLogger) when is_record(DiskLogger, disk_logger) ->
+    gen_server:start_link({local, DiskLogger#disk_logger.server_name}, ?MODULE, DiskLogger, []).
 	
 %% @spec sync() -> ok | {error, Reason}
 %% @doc call disk_log:sync() and force flush of cache
-sync() ->
-	gen_server:call(?MODULE, sync, infinity).
+sync(ServerName) ->
+	gen_server:call(ServerName, sync, infinity).
 	
-%% @spec subscribe_to(Node) -> ok
-%%		 Node = list() | node()
+%% @spec register_as_subscriber_with(DiskLogger, Node) -> ok
+%%		 ServerName = atom()
+%%		 Node = node()
 %% @doc send a message to the specified node, registering the gen_server process as a subscriber
-subscribe_to(Node) when is_list(Node) -> 
-	subscribe_to(list_to_atom(Node));
+register_as_subscriber_with(ServerName, Node) when is_atom(ServerName), is_atom(Node) ->
+	io:format("subscribe ~p to ~p~n", [ServerName, Node]),
+	gen_server:call(ServerName, {register_as_subscriber_with, Node}).
 
-subscribe_to(Node) when is_atom(Node) ->
-	io:format("subscribe to ~p~n", [Node]),
-	gen_server:call(?MODULE, {subscribe_to, Node}).
-
-%% @spec ping() -> {ok, Pid}
+%% @spec ping(FromNode) -> [{ok, Pid}]
+%%		 FromNode = node()
 %%		 Pid = pid()
 %% @doc respond to ping requests sent from publisher nodes with the gen_server process id
-ping() ->
-	gen_server:call(?MODULE, ping).
+ping(FromNode) when is_atom(FromNode) ->
+	case application:get_env(log_roller_server, subscriptions) of
+		undefined ->
+			{error, application_not_running};
+		{ok, Subscriptions} ->
+			Results = 
+				[begin 
+					case lists:member(FromNode, Nodes) of
+						true ->
+							gen_server:call(Logger#disk_logger.server_name, ping);
+						false ->
+							false
+					end
+				 end || {Logger, Nodes} <- Subscriptions],
+			lists:filter(
+				fun ({ok, _}) -> true;
+					(_) -> false
+				end, Results)
+	end.
 	
-total_writes() ->
-	gen_server:call(?MODULE, total_writes).
+total_writes(ServerName) ->
+	gen_server:call(ServerName, total_writes).
 
 %% @spec current_location() -> Result
 %%		 Result = {FileStub, Index, Pos, SizeLimit, MaxIndex}
@@ -92,12 +99,12 @@ total_writes() ->
 %% insert.  SizeLimit and MaxIndex are the config values that
 %% dictate how large log files can become and how many files
 %% to distribute the logs amongst.
-current_location() ->
-	gen_server:call(?MODULE, current_location).
+current_location(ServerName) ->
+	gen_server:call(ServerName, current_location).
 	
-options() ->
-	gen_server:call(?MODULE, options).
-	
+options(ServerName) ->
+	gen_server:call(ServerName, options).
+		
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -110,8 +117,8 @@ options() ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init(_) ->
-	State = initialize_state(),
+init(Logger) ->
+	State = initialize_state(Logger),
 	{ok, State}.
 
 %%--------------------------------------------------------------------
@@ -124,14 +131,11 @@ init(_) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call(reload, _From, #state{log=Log}) ->
-	disk_log:close(Log),
-	{reply, ok, initialize_state()};
-
 handle_call(sync, _From, #state{log=Log}=State) ->	
 	{reply, disk_log:sync(Log), State};
 	
-handle_call({subscribe_to, Node}, _From, State) ->
+handle_call({register_as_subscriber_with, Node}, _From, State) ->
+	io:format("sending msg to ~p~n", [Node]),
 	Res = gen_event:call({error_logger, Node}, log_roller_h, {subscribe, self()}),
 	{reply, Res, State};
 
@@ -170,17 +174,24 @@ handle_cast(_Message, State) -> {noreply, State}.
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, total_writes=Writes}=State) ->
-	BinLog = term_to_binary(LogEntry),
-	LogSize = size(BinLog),
-	Bin = <<?Bin_Term_Start/binary, LogSize:16, BinLog:LogSize/binary, ?Bin_Term_Stop/binary>>,
-	disk_log:blog(Log, Bin),
-	{noreply, State#state{total_writes=Writes+1}};
+handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, total_writes=Writes}=State) ->
+	State1 =
+		case log_roller_filter:filter(LogEntry, Filters) of
+			[] ->
+				State;
+			[_] ->
+				BinLog = term_to_binary(LogEntry),
+				LogSize = size(BinLog),
+				Bin = <<?Bin_Term_Start/binary, LogSize:16, BinLog:LogSize/binary, ?Bin_Term_Stop/binary>>,
+				disk_log:blog(Log, Bin),
+				State#state{total_writes=Writes+1}			
+		end,
+	{noreply, State1};
 
-handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=Log}=State) ->
+handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=Log, server_name=ServerName}=State) ->
 	Infos = disk_log:info(Log),
 	Index = proplists:get_value(current_file, Infos),
-	spawn(fun() -> lrb:set_current_file(Index) end),
+	spawn(fun() -> lrb:set_current_file(ServerName, Index) end),
 	{noreply, State};
 	
 handle_info(_Info, State) -> io:format("info: ~p~n", [_Info]), {noreply, State}.
@@ -207,48 +218,44 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-
-log_file() ->
-	case application:get_env(log_roller_server, log_dir) of
-		undefined -> atom_to_list(?LOG_NAME);
-		{ok, Dir} -> 
-			case file:list_dir(Dir) of
-				{ok, _} -> 
-					Dir ++ "/" ++ atom_to_list(?LOG_NAME);
-				{error, enoent} ->
-					case file:make_dir(Dir) of
-						ok -> 
-							Dir ++ "/" ++ atom_to_list(?LOG_NAME);
-						DirErr ->
-							io:format("failed to create directory ~p: ~p~n", [Dir, DirErr]),
-							atom_to_list(?LOG_NAME)
-					end
-			end
-	end.
-	
-initialize_state() ->
-	LogFile = log_file(),
-	Maxbytes = 
-		case application:get_env(log_roller_server, maxbytes) of
-			undefined -> ?DEFAULT_MAXBYTES;
-			{ok, Val1} -> Val1
-		end,
-	Maxfiles = 
-		case application:get_env(log_roller_server, maxfiles) of
-			undefined -> ?DEFAULT_MAXFILES;
-			{ok, Val2} -> Val2
-		end,
+		
+initialize_state(Logger) when is_record(Logger, disk_logger) ->
+	LogFile = log_file(Logger),
 	Args = [
-		{name, ?LOG_NAME},
+		{name, Logger#disk_logger.name},
 		{file, LogFile},
 		{type, wrap},
 		{format, external},
 		{head, none},
 		{notify, true},
-		{size, {Maxbytes, Maxfiles}}
+		{size, {Logger#disk_logger.maxbytes, Logger#disk_logger.maxfiles}}
 	],
 	{ok, Log, Args1} = open_log(Args),
-	#state{log=Log, args=Args1, total_writes=0}.
+	#state{
+		log=Log, 
+		args=Args1, 
+		server_name=Logger#disk_logger.server_name,
+		filters=Logger#disk_logger.filters, 
+		total_writes=0
+	}.
+
+log_file(#disk_logger{name=Name, log_dir=Dir}) ->
+	case Dir of
+		undefined -> atom_to_list(Name);
+		_ -> 
+			case file:list_dir(Dir) of
+				{ok, _} -> 
+					Dir ++ "/" ++ atom_to_list(Name);
+				{error, enoent} ->
+					case file:make_dir(Dir) of
+						ok -> 
+							Dir ++ "/" ++ atom_to_list(Name);
+						DirErr ->
+							io:format("failed to create directory ~p: ~p~n", [Dir, DirErr]),
+							atom_to_list(Name)
+					end
+			end
+	end.
 	
 open_log(Args) ->
 	Res = disk_log:open(Args),

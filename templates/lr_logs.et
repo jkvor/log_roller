@@ -2,6 +2,6 @@
 <% [print_log(Prefix, Entry) || Entry <- List] %>
 <%@ print_log(_Prefix, [Time, Type, Node, Msg]) %>
 <pre class="logs" onmouseover="javascript:this.className='<% atom_to_list(Type) %>';" onmouseout="javascript:this.className='logs';">
-<span class="<% atom_to_list(Type) %>">= <% string:left(atom_to_list(Type) ++ " ", 22, $=) %> <% string:left(Time ++ " ", 32, $=) %></span> <span><% Node %></span>
+<span class="<% atom_to_list(Type) %>">= <% string:left(atom_to_list(Type) ++ " ", 22, $=) %> <% string:left(Time ++ " ", 32, $=) %></span> <span><% atom_to_list(Node) %></span>
 <% lists:flatten(io_lib:format("~p", [Msg])) %>
 </pre>

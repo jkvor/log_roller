@@ -30,39 +30,52 @@
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/0, init/1, handle_call/3, handle_cast/2, 
+-export([start_link/1, init/1, handle_call/3, handle_cast/2, 
 		 handle_info/2, terminate/2, code_change/3]).
 
--export([set_current_file/1, fetch/0, fetch/1]).
+-export([set_current_file/2, fetch/0, fetch/1, fetch/2, disk_logger_names/0]).
 
 -include("log_roller.hrl").
+
+-define(TIMEOUT, 10000).
 
 %%====================================================================
 %% API
 %%====================================================================
 
-%% @spec start_link() -> {ok,Pid} | ignore | {error,Error}
+%% @spec start_link(DiskLoggers) -> {ok,Pid} | ignore | {error,Error}
+%%		 DiskLoggers = [disk_logger()]
 %% @doc start the server
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(DiskLoggers) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, DiskLoggers, []).
     
-set_current_file(Index) ->
-	log_roller_disk_reader:invalidate_cache(Index).
+%% @spec set_current_file(ServerName, Index) -> ok
+%%		 ServerName = atom()
+%%		 Index = integer()
+%% @doc when a log file is closed, refresh it in the cache
+set_current_file(ServerName, Index) ->
+	gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), {invalidate_cache, ServerName, Index}, ?TIMEOUT).
 	
-%% @spec fetch() -> Results
 %% @equiv fetch([])
-fetch() -> fetch([]).
+fetch() -> fetch(all, []).
 	
-%% @spec fetch(Opts) -> Result
+%% @equiv fetch(all, Opts)
+fetch(Opts) when is_list(Opts) -> fetch(all, Opts).
+
+%% @spec fetch(ServerName, Opts) -> Result
+%%		 ServerName = atom()
 %% 		 Opts = [{max, integer()} |
-%%				 {type, atom()} | {type, list(atom())} |
-%%				 {node, string()} | {node, list(string())} |
+%%				 {types, [atom()]} |
+%%				 {nodes, [node()]} |
 %%				 {grep, string()}]
-%%		 Result = list(list(Time::string(), Type::atom(), Node::string(), Message::string()))
-%% @doc fetch a list of log entries
-fetch(Opts) when is_list(Opts) ->
-    gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), {fetch, Opts}, 10000).
-    
+%%		 Result = list(list(Time::string(), Type::atom(), Node::atom(), Message::any()))
+%% @doc fetch a list of log entries for a specific disk_logger
+fetch(DiskLoggerName, Opts) when is_atom(DiskLoggerName), is_list(Opts) ->
+    gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), {fetch, DiskLoggerName, Opts}, ?TIMEOUT).
+
+disk_logger_names() ->
+	gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), disk_logger_names, ?TIMEOUT).
+	
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -75,12 +88,15 @@ fetch(Opts) when is_list(Opts) ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init(_) ->
+init(DiskLoggers) ->
     process_flag(trap_exit, true),
     ok = pg2:create(log_roller_browser_grp),
     ok = pg2:join(log_roller_browser_grp, self()),
-	{Maxbytes, _} = proplists:get_value(size, log_roller_disk_logger:options(), {65536, 0}),
-	{ok, log_roller_cache:start(Maxbytes)}.
+	State =
+		[begin
+			DiskLogger#disk_logger{cache=log_roller_cache:start(DiskLogger#disk_logger.cache_size)}
+		 end || DiskLogger <- DiskLoggers],
+	{ok, State}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -92,17 +108,20 @@ init(_) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call({fetch, Opts}, _From, Cache) ->
-	Max = proplists:get_value(max, Opts, 100),
-	UseCache = proplists:get_value(cache, Opts, true),
-	log_roller_cache:store_cache(Cache),
-	case fetch_internal(Opts, Max, UseCache) of
-		{ok, Results} ->
-			{reply, lists:reverse(Results), log_roller_cache:fetch_cache()};
-		{error, Reason} ->
-			{reply, {error, Reason}, Cache}
-	end;
+handle_call({invalidate_cache, ServerName, Index}, _From, DiskLoggers) ->
+	Result = invalidate_cache_internal(disk_logger_by_server_name(ServerName, DiskLoggers), Index),
+	{reply, Result, DiskLoggers};
+
+%handle_call({fetch, all, Opts}, _From, DiskLoggers) ->	
+%	{reply, fetch_map_reduce(DiskLoggers, Opts), DiskLoggers};
 	
+handle_call({fetch, DiskLoggerName, Opts}, _From, DiskLoggers) ->
+	Result = fetch_internal(disk_logger_by_name(DiskLoggerName, DiskLoggers), Opts),
+	{reply, Result, DiskLoggers};
+
+handle_call(disk_logger_names, _From, DiskLoggers) ->
+	{reply, [Name || #disk_logger{name=Name} <- DiskLoggers], DiskLoggers};
+		
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 
 %%--------------------------------------------------------------------
@@ -144,20 +163,70 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+	
+disk_logger_by_name(Name, Loggers) -> disk_logger_by_prop(Name, 2, Loggers).
+	
+disk_logger_by_server_name(Name, Loggers) -> disk_logger_by_prop(Name, 3, Loggers).
+	
+disk_logger_by_prop(Prop, Index, DiskLoggers) ->
+	case lists:keysearch(Prop, Index, DiskLoggers) of
+		{value, DiskLogger} ->
+			DiskLogger;
+		false ->
+			error_logger:error_report({?MODULE, fetch, disk_logger_not_found, Prop}),
+			{error, disk_logger_not_found}
+	end.
+	
+% fetch_map_reduce(DiskLoggers, Opts) ->
+% 	Self = self(),
+% 	[begin
+% 		io:format("spawning ~p~n", [DiskLogger#disk_logger.name]),
+% 		spawn(fun() -> fetch_terms(Self, DiskLogger, Opts) end)
+% 	 end || DiskLogger <- DiskLoggers],
+% 	collect_responses(DiskLoggers, []).
+% 
+% collect_responses([], Acc) -> Acc;
+% 
+% collect_responses(DiskLoggers, Acc) ->
+% 	receive
+% 		{Name, _From, Terms} ->
+% 			case lists:keytake(Name, 2, DiskLoggers) of
+% 				{value, _DiskLogger, DiskLoggers1} ->
+% 					collect_responses(DiskLoggers1, lists:append(Terms, Acc));
+% 				false ->
+% 					collect_responses(DiskLoggers, Acc)
+% 			end
+% 	after ?TIMEOUT ->
+% 		{error, map_reduce_timeout}
+% 	end.
 
-fetch_internal(Opts, Max, UseCache) -> 
-	case log_roller_disk_reader:start_continuation(UseCache) of
-		{ok, Cont} -> fetch_internal(Opts, Max, [], Cont);
+invalidate_cache_internal({error, Err}, _) -> {error, Err};
+
+invalidate_cache_internal(Logger, Index) ->
+	log_roller_disk_reader:invalidate_cache(Logger#disk_logger.server_name, Logger#disk_logger.cache, Index).
+	
+fetch_internal({error, Err}, _) -> {error, Err};
+
+fetch_internal(DiskLogger, Opts) ->
+	Max = proplists:get_value(max, Opts, 100),
+	UseCache = proplists:get_value(cache, Opts, true),
+	Cont = log_roller_disk_reader:start_continuation(DiskLogger#disk_logger.server_name, DiskLogger#disk_logger.cache, UseCache),
+	case fetch_by_continuation(Opts, Max, [], Cont) of
+		{ok, Results} -> lists:reverse(Results);
 		{error, Reason} -> {error, Reason}
 	end.
+	
+fetch_by_continuation(_, _, _, {error, Err}) -> {error, Err};
 
-fetch_internal(_Opts, Max, Acc, _Continuation) when is_integer(Max), length(Acc) >= Max -> {ok, Acc};
+fetch_by_continuation(A, B, C, {ok, Cont}) -> fetch_by_continuation(A, B, C, Cont);
 
-fetch_internal(Opts, Max, Acc, Continuation) ->
+fetch_by_continuation(_, Max, Acc, _) when is_integer(Max), length(Acc) >= Max -> {ok, Acc};
+
+fetch_by_continuation(Opts, Max, Acc, Continuation) ->
 	case catch log_roller_disk_reader:terms(Continuation) of
 		{ok, Continuation1, Terms} ->
 			Acc1 = filter(Terms, Opts, Max, Acc),
-			fetch_internal(Opts, Max, Acc1, Continuation1);
+			fetch_by_continuation(Opts, Max, Acc1, Continuation1);
 		{error, read_full_cycle} ->
 			{ok, Acc};
 		{error, Reason} ->
@@ -169,68 +238,15 @@ fetch_internal(Opts, Max, Acc, Continuation) ->
 	
 filter([], _Opts, _Max, Acc) -> Acc;
 
-filter(_Results, _Opts, Max, Acc) when is_integer(Max), length(Acc) >= Max -> Acc;
+filter(_Terms, _Opts, Max, Acc) when is_integer(Max), length(Acc) >= Max -> Acc;
 
-filter([{log_entry, Time, Type, Node, Msg}|Tail], Opts, Max, Acc) ->
-	Types = proplists:get_all_values(type, Opts),
-	Nodes = proplists:get_all_values(node, Opts),
-	Grep  = 
-		case proplists:get_value(grep, Opts) of
-			undefined -> undefined;
-			Val ->
-				case re:compile(Val) of
-					{ok, MP} -> MP;
-					_ -> undefined
-				end
-		end,
-	
-	Type_Fun = 
-		fun(TypeIn) ->
-			case Types of
-				[] -> true;
-				[Types1] when is_list(Types1) ->
-					case lists:member(all, Types1) of
-						true -> true;
-						false ->
-							lists:member(TypeIn, Types1)
-					end;
-				_ ->
-					case lists:member(all, Types) of
-						true -> true;
-						false ->
-							lists:member(TypeIn, Types)
-					end
-			end
-		end,
-		
-	Node_Fun =
-		fun(NodeIn) ->
-			case Nodes of
-				[] -> true;
-				_ ->
-					lists:member(NodeIn, Nodes)
-			end
-		end,
-		
-	Grep_Fun =
-		fun(GrepIn) ->
-			case Grep of
-				undefined -> true;
-				_ ->
-					Subject = lists:flatten(io_lib:format("~p", [GrepIn])),
-					case re:run(Subject,Grep) of
-						{match, _} -> true;
-						nomatch -> false
-					end
-			end
-		end,
-		
-	Term = [format_time(Time), Type, Node, Msg],
-	case [ Type_Fun(Type), Node_Fun(Node), Grep_Fun(Term) ] of
-		[true, true, true] -> 
-			filter(Tail, Opts, Max, [Term|Acc]);
-		_ -> 
-			filter(Tail, Opts, Max, Acc)
+filter([LogEntry|Tail], Opts, Max, Acc) ->
+	case log_roller_filter:filter(LogEntry, Opts) of
+		[] ->
+			filter(Tail, Opts, Max, Acc);
+		[_] ->
+			Term = [format_time(LogEntry#log_entry.time), LogEntry#log_entry.type, LogEntry#log_entry.node, LogEntry#log_entry.message],
+			filter(Tail, Opts, Max, [Term|Acc])
 	end.
 	
 format_time({Mega,Secs,Micro}) ->

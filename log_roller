@@ -17,7 +17,7 @@ get_sasl() {
 }
 
 dev_server() {
-	erl -pa ebin -name log_roller@$HOSTNAME +W w +A 1 -config priv/log_roller -boot bin/log_roller_server
+	erl -pa ebin -name log_roller@$HOSTNAME +W w +A 1 -config priv/dev -boot bin/log_roller_server
 }
 
 console_server() {
@@ -29,10 +29,10 @@ start_server() {
 }
 
 dev_webtool() {
-	if [ -z "${ARG1}" ] || [ -z "${ARG2}" ] || [ -z "${ARG3}" ]; then
-		echo -e "Invalid webtool args: <port> <bindaddr> <servername>"
+	if [ -z "${ARG1}" ] && [ -z "${ARG2}" ] && [ -z "${ARG3}" ]; then
+		erl -pa ebin -name webtool@$HOSTNAME +W w +A 1 -config priv/dev -boot bin/log_roller_server -eval "log_roller_server:start_webtool()"
 	else
-		erl -name webtool@$HOSTNAME +W w +A 1 -boot log_roller_server -pa ebin -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})"
+		erl -pa ebin -name webtool@$HOSTNAME +W w +A 1 -config priv/dev -boot bin/log_roller_server -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})"
 	fi
 }
 

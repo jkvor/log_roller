@@ -1,5 +1,8 @@
 <%? {data, Prefix, List} = Data %>
+<div id="log_frame">
 <% [print_log(Prefix, Entry) || Entry <- List] %>
+</div>
+
 <%@ print_log(_Prefix, [Time, Type, Node, Msg]) %>
 <pre class="logs" onmouseover="javascript:this.className='<% atom_to_list(Type) %>';" onmouseout="javascript:this.className='logs';">
 <span class="<% atom_to_list(Type) %>">= <% string:left(atom_to_list(Type) ++ " ", 22, $=) %> <% string:left(Time ++ " ", 32, $=) %></span> <span><% atom_to_list(Node) %></span>

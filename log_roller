@@ -30,7 +30,7 @@ start_server() {
 
 dev_webtool() {
 	if [ -z "${ARG1}" ] && [ -z "${ARG2}" ] && [ -z "${ARG3}" ]; then
-		erl -pa ebin -name webtool@$HOSTNAME +W w +A 1 -config priv/dev -boot bin/log_roller_server -eval "log_roller_server:start_webtool()"
+		erl -pa ebin -name webtool@$HOSTNAME +W w +A 1 -boot bin/log_roller_server -eval "log_roller_server:start_webtool()"
 	else
 		erl -pa ebin -name webtool@$HOSTNAME +W w +A 1 -config priv/dev -boot bin/log_roller_server -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})"
 	fi

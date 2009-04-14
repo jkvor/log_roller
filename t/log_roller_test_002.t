@@ -25,7 +25,7 @@ main(_) ->
 	%% receive them all and then flush the disk_log cache before trying to read from disk
 	io:format("waiting for write to disk~n"),
 	log_roller_test:wait_for_queue_to_empty(),
-	ok = log_roller_disk_logger:sync(log_roller_disk_logger_default),
+	ok = log_roller_disk_logger:sync(default),
 	
 	io:format("fetching~n"),
 	etap_exception:lives_ok(fun() ->

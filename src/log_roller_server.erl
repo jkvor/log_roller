@@ -101,7 +101,7 @@ init(_) ->
 	ok = application:set_env(?MODULE, disk_loggers, DiskLoggers),
 	DiskLoggerChildren =
 		[begin
-			{DiskLogger#disk_logger.server_name, {log_roller_disk_logger, start_link, [DiskLogger]}, permanent, 5000, worker, [log_roller_disk_logger]}
+			{?Server_Name(DiskLogger#disk_logger.name), {log_roller_disk_logger, start_link, [DiskLogger]}, permanent, 5000, worker, [log_roller_disk_logger]}
 		 end || DiskLogger <- DiskLoggers],
 	Lrb = {lrb, {lrb, start_link, [DiskLoggers]}, permanent, 5000, worker, [lrb]}, 
 	{ok, {{one_for_one, 10, 10}, 
@@ -112,7 +112,7 @@ init(_) ->
 get_disk_loggers_from_config() ->
 	case proplists:delete(included_applications, application:get_all_env(log_roller_server)) of
 		[] ->
-			[#disk_logger{server_name=server_name(default)}];
+			[#disk_logger{}];
 		Envs ->
 			get_disk_loggers_from_config(Envs, [])
 	end.
@@ -148,7 +148,7 @@ get_disk_loggers_from_config([{Custom, Args}|Tail], Loggers) when is_atom(Custom
 	Fields = record_info(fields, disk_logger),
 	Index = [I+1 || I <- lists:seq(1, length(Fields))],
 	Ref = lists:zip(Fields, Index),
-	Logger = populate_disk_logger_fields(#disk_logger{name=Custom, server_name=server_name(Custom)}, [filters, log_dir, cache_size, maxbytes, maxfiles], Args, Ref),
+	Logger = populate_disk_logger_fields(#disk_logger{name=Custom}, [filters, log_dir, cache_size, maxbytes, maxfiles], Args, Ref),
 	get_disk_loggers_from_config(Tail, [Logger|Loggers]).
 
 get_default_logger(Loggers) ->
@@ -156,7 +156,7 @@ get_default_logger(Loggers) ->
 		{value, Default, Loggers1} ->
 			{Default, Loggers1};
 		false ->
-			{#disk_logger{server_name=server_name(default)}, Loggers}
+			{#disk_logger{}, Loggers}
 	end.
 
 populate_disk_logger_fields(Logger, [], _, _) -> Logger;
@@ -171,9 +171,6 @@ populate_disk_logger_fields(Logger, [Field|Tail], Args, Ref) ->
 			populate_disk_logger_fields(Logger1, Tail, Args, Ref)
 	end.
 
-server_name(Name) ->
-	list_to_atom("log_roller_disk_logger_" ++ atom_to_list(Name)).
-	
 %% @hidden
 start_phase(pg2, _, _) ->
     pg2:which_groups(),
@@ -217,7 +214,7 @@ get_matching_nodes(DiskLogger, Nodes) ->
 register_as_subscriber(Subscriptions) ->
 	[begin
 		[begin
-			log_roller_disk_logger:register_as_subscriber_with(DiskLogger#disk_logger.server_name, Node)
+			log_roller_disk_logger:register_as_subscriber_with(DiskLogger#disk_logger.name, Node)
 		 end || Node <- Nodes]
 	 end || {DiskLogger, Nodes} <- Subscriptions],	
 	timer:sleep(360000),

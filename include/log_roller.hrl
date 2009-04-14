@@ -23,10 +23,9 @@
 
 -record(log_entry, {time, type, node, message}).
 
-%% {disk_logger, Name::atom(), ServerName::atom(), Filters::[{atom(), any()}], LogDir::string(), MaxBytes::integer(), MaxFiles::integer()}
+%% {disk_logger, Name::atom(), Filters::[{atom(), any()}], LogDir::string(), MaxBytes::integer(), MaxFiles::integer()}
 -record(disk_logger, {
 	name = default,
-	server_name,
 	filters = [], 
 	log_dir = undefined, 
 	cache_size = 1048576,
@@ -38,3 +37,5 @@
 -define(MAX_CHUNK_SIZE, 65536).
 -define(Bin_Term_Start, <<16#FF, 16#FF, 16#FF, 16#FF>>).
 -define(Bin_Term_Stop, <<16#EE, 16#EE, 16#EE, 16#EE>>).
+
+-define(Server_Name, fun(N) -> list_to_atom(lists:flatten(io_lib:format("log_roller_disk_logger_~p", [N]))) end).

@@ -12,13 +12,11 @@ main(_) ->
     etap:plan(Num),
 	
 	Cache = log_roller_cache:start(102400),
-	
-	log_roller_cache:store_cache(Cache),
-	
-	[log_roller_cache:put(integer_to_list(I), list_to_binary(Text ++ integer_to_list(I))) || I <- lists:seq(1,Num)],
+		
+	[log_roller_cache:put(Cache, integer_to_list(I), list_to_binary(Text ++ integer_to_list(I))) || I <- lists:seq(1,Num)],
 	
 	[begin
-		etap:is(binary_to_list(log_roller_cache:get(integer_to_list(I))), "Quisque non metus at justo gravida gravida " ++ integer_to_list(I), "cache value matches")
+		etap:is(binary_to_list(log_roller_cache:get(Cache, integer_to_list(I))), "Quisque non metus at justo gravida gravida " ++ integer_to_list(I), "cache value matches")
 	 end || I <- lists:seq(1, Num)],
 	
     etap:end_tests().

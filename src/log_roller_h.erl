@@ -66,7 +66,7 @@ handle_event({error_report, _Gleader, {Pid, std_error, Report}}, State) when is_
 	{ok, State1};
 	
 handle_event({error_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid) ->
-	{ok, State1} = commit(State, #log_entry{type=Type, node=get_node(Pid), time=erlang:now(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report}),
 	{ok, State1};
 	
 handle_event({warning_msg, _Gleader, {Pid, Format, Data}}, State) when is_pid(Pid) ->
@@ -78,7 +78,7 @@ handle_event({warning_report, _Gleader, {Pid, std_warning, Report}}, State) when
 	{ok, State1};
 		
 handle_event({warning_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid) ->
-	{ok, State1} = commit(State, #log_entry{type=Type, node=get_node(Pid), time=erlang:now(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report}),
 	{ok, State1};
 		
 handle_event({info_msg, _Gleader, {Pid, Format, Data}}, State) when is_pid(Pid) ->
@@ -90,7 +90,7 @@ handle_event({info_report, _Gleader, {Pid, std_info, Report}}, State) when is_pi
 	{ok, State1};
 		
 handle_event({info_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid) ->
-	{ok, State1} = commit(State, #log_entry{type=Type, node=get_node(Pid), time=erlang:now(), message=Report}),
+	{ok, State1} = commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report}),
 	{ok, State1};
 
 handle_event(_, State) ->
@@ -148,6 +148,13 @@ code_change(_OldVsn, State, _Extra) ->
 %%%----------------------------------------------------------------------
 %%% Internal functions
 %%%----------------------------------------------------------------------
+package(progress_report) -> progress;
+package(warning_report) -> warning;
+package(info_report) -> info;
+package(error_report) -> error;
+package(crash_report) -> error;
+package(Other) -> Other.
+
 get_node(emulator) -> emulator;
 get_node(Other) -> 
 	case (catch node(Other)) of

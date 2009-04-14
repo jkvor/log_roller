@@ -29,7 +29,7 @@
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
 
--record(cprops, {server_name, file_stub, chunk_size, size_limit, max_index, use_cache}).
+-record(cprops, {disk_logger_name, file_stub, chunk_size, size_limit, max_index, use_cache}).
 -record(cstate, {index, position, last_timestamp, binary_remainder, cache}).
 -record(continuation, {properties, state}).
 -record(cache_entry, {cstate, terms}).
@@ -40,18 +40,18 @@
 
 %% @spec start_continuation(atom(), {cherly, post()}, true | false) -> {ok, continuation()} | {error, string()}
 %% @doc fetch a continuation pointed to the log frame currently being written to
-start_continuation(ServerName, Cache, UseCache) ->
-	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(ServerName),
+start_continuation(LoggerName, Cache, UseCache) ->
+	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(LoggerName),
 	StartPos = snap_to_grid(Pos),
 	ChunkSize = Pos-StartPos,
-	Props = {cprops, ServerName, FileStub, ChunkSize, SizeLimit, MaxIndex, UseCache},
+	Props = {cprops, LoggerName, FileStub, ChunkSize, SizeLimit, MaxIndex, UseCache},
 	State = {cstate, Index, StartPos, {9999,0,0}, <<>>, Cache},
 	{ok, {continuation, Props, State}}.
 
 %% @spec invalidate_cache(atom(), {cherly, port()}, Index) -> ok | {error, string()}
 %% @doc remove all cache entries that point to the file ending in Index
-invalidate_cache(ServerName, Cache, Index) ->
-	Opts = log_roller_disk_logger:options(ServerName),
+invalidate_cache(LoggerName, Cache, Index) ->
+	Opts = log_roller_disk_logger:options(LoggerName),
 	{SizeLimit, _} = proplists:get_value(size, Opts),
 	Pos = snap_to_grid(SizeLimit),
 	invalidate_cache_frame(Cache, Index, Pos).
@@ -93,17 +93,17 @@ invalidate_cache_frame(_, _, _) -> ok.
 %% @doc read a chunk either from cache or file
 %%	def chunk - a block of binary data containing erlang tuples (log_entry records)
 read_chunk(#continuation{properties=Props, state=State}=Cont) ->
-    CacheFrame = get_cache_frame(Props#cprops.server_name, State#cstate.cache, Props#cprops.use_cache, State#cstate.index, State#cstate.position),
+    CacheFrame = get_cache_frame(Props#cprops.disk_logger_name, State#cstate.cache, Props#cprops.use_cache, State#cstate.index, State#cstate.position),
     case CacheFrame of
         undefined -> read_chunk_from_file(Cont);
         _ -> read_chunk_from_cache(Cont, CacheFrame)
     end.
     
-%% @spec get_cache_frame(ServerName, UseCache, Index, Pos) -> cache_entry() | undefined
+%% @spec get_cache_frame(LoggerName, UseCache, Index, Pos) -> cache_entry() | undefined
 %% @doc fetch the cache frame for the {Index,Pos} key
 get_cache_frame(_, _, false, _, _) -> undefined;
-get_cache_frame(ServerName, Cache, true, Index, Pos) ->
-    IsCurrent = is_current_location(ServerName, Index, Pos),
+get_cache_frame(LoggerName, Cache, true, Index, Pos) ->
+    IsCurrent = is_current_location(LoggerName, Index, Pos),
     if
 		IsCurrent -> 
 		    %% ignore cache for the frame being written to currently
@@ -120,8 +120,8 @@ get_cache_frame(ServerName, Cache, true, Index, Pos) ->
 %% Fetch the current location from the disk logger.
 %% If {Index,Pos} is inside the frame currently being
 %% written to then return true, otherwise, false
-is_current_location(ServerName, Index, Pos) ->
-    {_, CurrIndex, CurrPos, _, _} = log_roller_disk_logger:current_location(ServerName),
+is_current_location(LoggerName, Index, Pos) ->
+    {_, CurrIndex, CurrPos, _, _} = log_roller_disk_logger:current_location(LoggerName),
     if
 		Index == CurrIndex ->
 			A = snap_to_grid(Pos),

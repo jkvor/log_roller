@@ -37,13 +37,18 @@ compile_templates() ->
 %% @spec config_data() -> {log_roller, Args::list()}
 %% @doc fetch config data for loading module in webtool
 config_data() ->
-	{log_roller, [{web_data,{"log_roller", ?TOOL_BASE_URL ++ "/server/all"}}, 
+	{log_roller, [{web_data,{"log_roller", ?TOOL_BASE_URL ++ "/server"}}, 
 			 {alias,{erl_alias,"/log_roller",[log_roller_webtool]}}
 			]}.
 
 %% @spec index(Env::list(), Input::list()) -> binary()
 %% @doc the index function displays the default log view
+server(_Env, []) ->
+    ServerName = lists:nth(1, lrb:disk_logger_names()),
+    display([{"max", "20"}], atom_to_list(ServerName));
+    
 server(_Env, Input) ->
+    io:format("input: ~p~n", [Input]),
 	case string:tokens(Input, "?") of
 		[ServerName] ->
 			display([{"max", "20"}], ServerName);

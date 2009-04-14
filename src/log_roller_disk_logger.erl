@@ -34,7 +34,7 @@
 
 -include("log_roller.hrl").
 
--record(state, {log, args, server_name, filters, total_writes}).
+-record(state, {log, args, disk_logger_name, filters, total_writes}).
 
 %%====================================================================
 %% API
@@ -43,20 +43,22 @@
 %% @spec start_link() -> {ok,Pid} | ignore | {error,Error}
 %% @doc start the server
 start_link(DiskLogger) when is_record(DiskLogger, disk_logger) ->
-    gen_server:start_link({local, DiskLogger#disk_logger.server_name}, ?MODULE, DiskLogger, []).
+    io:format("start server: ~p~n", [?Server_Name(DiskLogger#disk_logger.name)]),
+    gen_server:start_link({local, ?Server_Name(DiskLogger#disk_logger.name)}, ?MODULE, DiskLogger, []).
 	
-%% @spec sync() -> ok | {error, Reason}
+%% @spec sync(LoggerName) -> ok | {error, Reason}
+%%       LoggerName = atom()
 %% @doc call disk_log:sync() and force flush of cache
-sync(ServerName) ->
-	gen_server:call(ServerName, sync, infinity).
+sync(LoggerName) when is_atom(LoggerName) ->
+	gen_server:call(?Server_Name(LoggerName), sync, infinity).
 	
-%% @spec register_as_subscriber_with(DiskLogger, Node) -> ok
-%%		 ServerName = atom()
+%% @spec register_as_subscriber_with(LoggerName, Node) -> ok
+%%		 LoggerName = atom()
 %%		 Node = node()
 %% @doc send a message to the specified node, registering the gen_server process as a subscriber
-register_as_subscriber_with(ServerName, Node) when is_atom(ServerName), is_atom(Node) ->
-	io:format("subscribe ~p to ~p~n", [ServerName, Node]),
-	gen_server:call(ServerName, {register_as_subscriber_with, Node}).
+register_as_subscriber_with(LoggerName, Node) when is_atom(LoggerName), is_atom(Node) ->
+	io:format("subscribe ~p to ~p~n", [LoggerName, Node]),
+	gen_server:call(?Server_Name(LoggerName), {register_as_subscriber_with, Node}).
 
 %% @spec ping(FromNode) -> [{ok, Pid}]
 %%		 FromNode = node()
@@ -71,7 +73,7 @@ ping(FromNode) when is_atom(FromNode) ->
 				[begin 
 					case lists:member(FromNode, Nodes) of
 						true ->
-							gen_server:call(Logger#disk_logger.server_name, ping);
+							gen_server:call(?Server_Name(Logger#disk_logger.name), ping);
 						false ->
 							false
 					end
@@ -82,10 +84,13 @@ ping(FromNode) when is_atom(FromNode) ->
 				end, Results)
 	end.
 	
-total_writes(ServerName) ->
-	gen_server:call(ServerName, total_writes).
+%% @spec total_writes(LoggerName) -> integer()
+%%       LoggerName = atom()
+total_writes(LoggerName) when is_atom(LoggerName) ->
+	gen_server:call(?Server_Name(LoggerName), total_writes).
 
-%% @spec current_location() -> Result
+%% @spec current_location(LoggerName) -> Result
+%%       LoggerName = atom()
 %%		 Result = {FileStub, Index, Pos, SizeLimit, MaxIndex}
 %%		 FileStub = list()
 %%		 Index = integer()
@@ -99,12 +104,22 @@ total_writes(ServerName) ->
 %% insert.  SizeLimit and MaxIndex are the config values that
 %% dictate how large log files can become and how many files
 %% to distribute the logs amongst.
-current_location(ServerName) ->
-	gen_server:call(ServerName, current_location).
+current_location(LoggerName) when is_atom(LoggerName) ->
+	gen_server:call(?Server_Name(LoggerName), current_location).
 	
-options(ServerName) ->
-	gen_server:call(ServerName, options).
-		
+%% @spec options(LoggerName) -> Result
+%%       LoggerName = atom()
+%%       Result = [
+%%          {name, DiskLoggerName::atom()},
+%%          {file, LogFile::string()},
+%%          {type, wrap},
+%%          {format, external},
+%%          {head, none},
+%%          {notify, true},
+%%          {size, {MaxBytes::integer(), MaxFiles::integer()}}]
+options(LoggerName) when is_atom(LoggerName) ->
+	gen_server:call(?Server_Name(LoggerName), options).
+
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -117,8 +132,8 @@ options(ServerName) ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init(Logger) ->
-	State = initialize_state(Logger),
+init(DiskLogger) when is_record(DiskLogger, disk_logger) ->
+	State = initialize_state(DiskLogger),
 	{ok, State}.
 
 %%--------------------------------------------------------------------
@@ -188,10 +203,10 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, to
 		end,
 	{noreply, State1};
 
-handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=Log, server_name=ServerName}=State) ->
+handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=Log, disk_logger_name=Name}=State) ->
 	Infos = disk_log:info(Log),
 	Index = proplists:get_value(current_file, Infos),
-	spawn(fun() -> lrb:set_current_file(ServerName, Index) end),
+	spawn(fun() -> lrb:set_current_file(Name, Index) end),
 	{noreply, State};
 	
 handle_info(_Info, State) -> io:format("info: ~p~n", [_Info]), {noreply, State}.
@@ -219,23 +234,23 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%% Internal functions
 %%--------------------------------------------------------------------
 		
-initialize_state(Logger) when is_record(Logger, disk_logger) ->
-	LogFile = log_file(Logger),
+initialize_state(DiskLogger) when is_record(DiskLogger, disk_logger) ->
+	LogFile = log_file(DiskLogger),
 	Args = [
-		{name, Logger#disk_logger.name},
+		{name, DiskLogger#disk_logger.name},
 		{file, LogFile},
 		{type, wrap},
 		{format, external},
 		{head, none},
 		{notify, true},
-		{size, {Logger#disk_logger.maxbytes, Logger#disk_logger.maxfiles}}
+		{size, {DiskLogger#disk_logger.maxbytes, DiskLogger#disk_logger.maxfiles}}
 	],
 	{ok, Log, Args1} = open_log(Args),
 	#state{
 		log=Log, 
 		args=Args1, 
-		server_name=Logger#disk_logger.server_name,
-		filters=Logger#disk_logger.filters, 
+		disk_logger_name=DiskLogger#disk_logger.name,
+		filters=DiskLogger#disk_logger.filters, 
 		total_writes=0
 	}.
 

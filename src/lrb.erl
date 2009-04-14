@@ -33,7 +33,7 @@
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, 
 		 handle_info/2, terminate/2, code_change/3]).
 
--export([set_current_file/2, fetch/0, fetch/1, fetch/2, disk_logger_names/0]).
+-export([set_current_file/2, fetch/1, fetch/2, disk_logger_names/0]).
 
 -include("log_roller.hrl").
 
@@ -49,30 +49,28 @@
 start_link(DiskLoggers) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, DiskLoggers, []).
     
-%% @spec set_current_file(ServerName, Index) -> ok
-%%		 ServerName = atom()
+%% @spec set_current_file(LoggerName, Index) -> ok
+%%		 LoggerName = atom()
 %%		 Index = integer()
 %% @doc when a log file is closed, refresh it in the cache
-set_current_file(ServerName, Index) ->
-	gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), {invalidate_cache, ServerName, Index}, ?TIMEOUT).
+set_current_file(LoggerName, Index) when is_atom(LoggerName), is_integer(Index) ->
+	gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), {invalidate_cache, LoggerName, Index}, ?TIMEOUT).
 	
-%% @equiv fetch([])
-fetch() -> fetch(all, []).
-	
-%% @equiv fetch(all, Opts)
-fetch(Opts) when is_list(Opts) -> fetch(all, Opts).
+%% @equiv fetch(LoggerName::atom(), [])
+fetch(LoggerName) when is_atom(LoggerName) -> fetch(LoggerName, []).
 
-%% @spec fetch(ServerName, Opts) -> Result
-%%		 ServerName = atom()
+%% @spec fetch(LoggerName, Opts) -> Result
+%%		 LoggerName = atom()
 %% 		 Opts = [{max, integer()} |
 %%				 {types, [atom()]} |
 %%				 {nodes, [node()]} |
 %%				 {grep, string()}]
 %%		 Result = list(list(Time::string(), Type::atom(), Node::atom(), Message::any()))
 %% @doc fetch a list of log entries for a specific disk_logger
-fetch(DiskLoggerName, Opts) when is_atom(DiskLoggerName), is_list(Opts) ->
-    gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), {fetch, DiskLoggerName, Opts}, ?TIMEOUT).
+fetch(LoggerName, Opts) when is_atom(LoggerName), is_list(Opts) ->
+    gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), {fetch, LoggerName, Opts}, ?TIMEOUT).
 
+%% @spec disk_logger_names() -> [atom()]
 disk_logger_names() ->
 	gen_server:call(pg2:get_closest_pid(log_roller_browser_grp), disk_logger_names, ?TIMEOUT).
 	
@@ -108,15 +106,12 @@ init(DiskLoggers) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call({invalidate_cache, ServerName, Index}, _From, DiskLoggers) ->
-	Result = invalidate_cache_internal(disk_logger_by_server_name(ServerName, DiskLoggers), Index),
+handle_call({invalidate_cache, LoggerName, Index}, _From, DiskLoggers) ->
+	Result = invalidate_cache_internal(disk_logger_by_name(LoggerName, DiskLoggers), Index),
 	{reply, Result, DiskLoggers};
-
-%handle_call({fetch, all, Opts}, _From, DiskLoggers) ->	
-%	{reply, fetch_map_reduce(DiskLoggers, Opts), DiskLoggers};
 	
-handle_call({fetch, DiskLoggerName, Opts}, _From, DiskLoggers) ->
-	Result = fetch_internal(disk_logger_by_name(DiskLoggerName, DiskLoggers), Opts),
+handle_call({fetch, LoggerName, Opts}, _From, DiskLoggers) ->
+	Result = fetch_internal(disk_logger_by_name(LoggerName, DiskLoggers), Opts),
 	{reply, Result, DiskLoggers};
 
 handle_call(disk_logger_names, _From, DiskLoggers) ->
@@ -164,53 +159,26 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%% Internal functions
 %%--------------------------------------------------------------------
 	
-disk_logger_by_name(Name, Loggers) -> disk_logger_by_prop(Name, 2, Loggers).
-	
-disk_logger_by_server_name(Name, Loggers) -> disk_logger_by_prop(Name, 3, Loggers).
-	
-disk_logger_by_prop(Prop, Index, DiskLoggers) ->
-	case lists:keysearch(Prop, Index, DiskLoggers) of
+disk_logger_by_name(Name, Loggers) -> 
+	case lists:keysearch(Name, 2, Loggers) of
 		{value, DiskLogger} ->
 			DiskLogger;
 		false ->
-			error_logger:error_report({?MODULE, fetch, disk_logger_not_found, Prop}),
+			error_logger:error_report({?MODULE, fetch, disk_logger_not_found, Name}),
 			{error, disk_logger_not_found}
 	end.
 	
-% fetch_map_reduce(DiskLoggers, Opts) ->
-% 	Self = self(),
-% 	[begin
-% 		io:format("spawning ~p~n", [DiskLogger#disk_logger.name]),
-% 		spawn(fun() -> fetch_terms(Self, DiskLogger, Opts) end)
-% 	 end || DiskLogger <- DiskLoggers],
-% 	collect_responses(DiskLoggers, []).
-% 
-% collect_responses([], Acc) -> Acc;
-% 
-% collect_responses(DiskLoggers, Acc) ->
-% 	receive
-% 		{Name, _From, Terms} ->
-% 			case lists:keytake(Name, 2, DiskLoggers) of
-% 				{value, _DiskLogger, DiskLoggers1} ->
-% 					collect_responses(DiskLoggers1, lists:append(Terms, Acc));
-% 				false ->
-% 					collect_responses(DiskLoggers, Acc)
-% 			end
-% 	after ?TIMEOUT ->
-% 		{error, map_reduce_timeout}
-% 	end.
-
 invalidate_cache_internal({error, Err}, _) -> {error, Err};
 
 invalidate_cache_internal(Logger, Index) ->
-	log_roller_disk_reader:invalidate_cache(Logger#disk_logger.server_name, Logger#disk_logger.cache, Index).
+	log_roller_disk_reader:invalidate_cache(Logger#disk_logger.name, Logger#disk_logger.cache, Index).
 	
 fetch_internal({error, Err}, _) -> {error, Err};
 
 fetch_internal(DiskLogger, Opts) ->
 	Max = proplists:get_value(max, Opts, 100),
 	UseCache = proplists:get_value(cache, Opts, true),
-	Cont = log_roller_disk_reader:start_continuation(DiskLogger#disk_logger.server_name, DiskLogger#disk_logger.cache, UseCache),
+	Cont = log_roller_disk_reader:start_continuation(DiskLogger#disk_logger.name, DiskLogger#disk_logger.cache, UseCache),
 	case fetch_by_continuation(Opts, Max, [], Cont) of
 		{ok, Results} -> lists:reverse(Results);
 		{error, Reason} -> {error, Reason}

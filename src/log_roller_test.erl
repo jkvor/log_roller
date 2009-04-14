@@ -37,6 +37,7 @@ setup_test(MaxBytes, MaxFiles) ->
 	put(log_dir, Log_Dir),
 	
 	application:set_env(log_roller_server, log_dir, Log_Dir),
+	application:set_env(log_roller_server, cache_size, MaxBytes),
 	application:set_env(log_roller_server, maxbytes, MaxBytes),
 	application:set_env(log_roller_server, maxfiles, MaxFiles),
 	

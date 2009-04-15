@@ -40,7 +40,7 @@ console_webtool() {
 	if [ -z "${ARG1}" ] || [ -z "${ARG2}" ] || [ -z "${ARG3}" ]; then
 		echo -e "Invalid webtool args: <port> <bindaddr> <servername>"
 	else
-		erl -name webtool@$HOSTNAME +W w +A 1 -config $(get_root)/log_roller -boot log_roller_server -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})"
+		erl -name webtool@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_server -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})"
 	fi
 }
 
@@ -48,7 +48,7 @@ start_webtool() {
 	if [ -z "${ARG1}" ] || [ -z "${ARG2}" ] || [ -z "${ARG3}" ]; then
 		echo -e "Invalid webtool args: <port> <bindaddr> <servername>"
 	else
-		erl -name webtool@$HOSTNAME +W w +A 1 -config $(get_root)/log_roller -boot log_roller_server -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})" -noshell -detached
+		erl -name webtool@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_server -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})" -noshell -detached
 	fi
 }
 

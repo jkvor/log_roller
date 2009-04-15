@@ -24,7 +24,7 @@
 %% @doc A webtool module that provides a user interface for log browsing
 -module(log_roller_webtool).
 
--export([compile_templates/0, config_data/0, server/2]).
+-export([compile_templates/0, config_data/0, index/2, server/2]).
 
 -define(TOOL_BASE_URL, "/log_roller/log_roller_webtool").
 
@@ -37,10 +37,13 @@ compile_templates() ->
 %% @spec config_data() -> {log_roller, Args::list()}
 %% @doc fetch config data for loading module in webtool
 config_data() ->
-	{log_roller, [{web_data,{"log_roller", ?TOOL_BASE_URL ++ "/server"}}, 
+	{log_roller, [{web_data,{"log_roller", ?TOOL_BASE_URL ++ "/index"}}, 
 			 {alias,{erl_alias,"/log_roller",[log_roller_webtool]}}
 			]}.
 
+index(_Env, _Input) ->
+    server(_Env, []).
+    
 %% @spec index(Env::list(), Input::list()) -> binary()
 %% @doc the index function displays the default log view
 server(_Env, []) ->

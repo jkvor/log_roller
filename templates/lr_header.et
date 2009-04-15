@@ -1,5 +1,4 @@
 <%? {data, Prefix, ServerName, ServerNames, Max, Type, Node, Grep} = Data %>
-<div id="header">
 <% tab_bar(Prefix, ServerName, ServerNames) %>
 <div id="header_frame">
 <form method="get" action="<% Prefix %>/server/<% ServerName %>">
@@ -35,7 +34,6 @@
 		</tr>
 	</table>
 </form>
-</div>
 </div>
 <%@ tab_bar(_, _, ServerNames) when is_list(ServerNames), length(ServerNames) == 1 %>
 <br/>

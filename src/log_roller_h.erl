@@ -148,10 +148,11 @@ code_change(_OldVsn, State, _Extra) ->
 %%%----------------------------------------------------------------------
 %%% Internal functions
 %%%----------------------------------------------------------------------
-package(progress_report) -> progress;
-package(warning_report) -> warning;
 package(info_report) -> info;
 package(error_report) -> error;
+package(warning_report) -> warning;
+package(progress_report) -> progress;
+package(supervisor_report) -> supervisor;
 package(crash_report) -> error;
 package(Other) -> Other.
 

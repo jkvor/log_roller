@@ -66,6 +66,10 @@
 			color: #336633;
 		}
 	
+		span.supervisor {
+			color: #336633;
+		}
+		
 		span.info {
 			color: #0066CC;
 		}
@@ -97,6 +101,14 @@
 		}
 	
 		pre.progress {
+			margin-bottom: 2px;
+			padding-left: 10px;
+			padding-right: 10px;
+			border: 1px solid #D4FED9;
+			background: #D4FED9;
+		}
+		
+		pre.supervisor {
 			margin-bottom: 2px;
 			padding-left: 10px;
 			padding-right: 10px;

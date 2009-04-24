@@ -24,6 +24,8 @@
 %% @doc A webtool module that provides a user interface for log browsing
 -module(log_roller_webtool).
 
+-compile(export_all).
+
 -export([compile_templates/0, config_data/0, index/2, server/2, code_injector/2]).
 
 -define(TOOL_BASE_URL, "/log_roller/log_roller_webtool").
@@ -96,11 +98,39 @@ code_injector(_Env, Input) ->
     Post = httpd:parse_query(Input),
     Node = proplists:get_value("node", Post, ""),
     Code = proplists:get_value("code", Post, ""),
-    Result = interpret(Node, Code),
-    code_injector:render({data, ?TOOL_BASE_URL, Node, Code, Result}).
+    Result = interpret(list_to_atom(Node), Code),
+    io:format("result: ~p~n", [Result]),
+    Html = lr_code_injector:render({data, ?TOOL_BASE_URL, Node, Code, Result}),
+    io:format("html: ~p~n", [Html]),
+    Html.
+    
+%% log_roller_webtool:interpret('stupid@jacob-vorreuters-macbook-pro-2.local', "hello.").
+%% rpc:call('stupid@jacob-vorreuters-macbook-pro-2.local', erlang, apply, [fun(_,_) -> hello end, [test, <<34>>]]).
+
+interpret(_, []) -> "";
     
 interpret(Node, Code) ->
-    ok.
+    io:format("node: ~p and code: ~p~n", [Node, Code]),
+    case catch dynamic_compile:from_string("-module(code_injector).\n-compile(export_all).\nexecute() -> \n" ++ Code ++ "\n") of
+        {'EXIT', Error} ->
+            lists:flatten(io_lib:format("error encountered: ~p~n", [Error]));
+        {Module, Bin} ->
+            Result =
+                case rpc:call(Node, code, load_binary, [Module, "code_injector.erl", Bin]) of
+                    {module, Module1} ->
+                        case rpc:call(Node, Module, execute, []) of
+                            {badrpc, {'EXIT', Error}} ->
+                                Error;
+                            Other ->
+                                Other
+                        end;
+                    {error, Reason} ->
+                        {error, Reason}
+                end,
+            lists:flatten(io_lib:format("~p~n", [Result]));
+        Other ->
+            lists:flatten(io_lib:format("error encountered: ~p~n", [Other]))
+    end.
 	
 dict_key("max") -> max;
 dict_key("type") -> types;

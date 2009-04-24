@@ -69,19 +69,15 @@ ping(FromNode) when is_atom(FromNode) ->
 		undefined ->
 			{error, application_not_running};
 		{ok, Subscriptions} ->
-			Results = 
-				[begin 
-					case lists:member(FromNode, Nodes) of
+		    lists:foldl(
+		        fun({Logger, Nodes}, Acc) ->
+		            case lists:member(FromNode, Nodes) of
 						true ->
-							gen_server:call(?Server_Name(Logger#disk_logger.name), ping);
+							[gen_server:call(?Server_Name(Logger#disk_logger.name), ping)|Acc];
 						false ->
-							false
+							Acc
 					end
-				 end || {Logger, Nodes} <- Subscriptions],
-			lists:filter(
-				fun ({ok, _}) -> true;
-					(_) -> false
-				end, Results)
+		        end, [], Subscriptions)
 	end.
 	
 %% @spec total_writes(LoggerName) -> integer()

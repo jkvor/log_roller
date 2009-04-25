@@ -185,6 +185,7 @@ start_phase(discovery, _, _) ->
 	spawn(fun() -> register_as_subscriber(Subscriptions) end),
 	ok.
 
+%% [{disk_logger(), [node()]}]
 determine_subscriptions([], _, Acc) -> Acc;
 
 determine_subscriptions([DiskLogger|Tail], Nodes, Acc) when is_record(DiskLogger, disk_logger), is_list(Nodes) ->

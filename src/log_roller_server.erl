@@ -53,11 +53,7 @@ start_webtool(Args) ->
 	ok.
 		
 start_webtool(Port, BindAddr, ServerName) when is_integer(Port), is_tuple(BindAddr), is_list(ServerName) ->
-	io:format("start_webtool(~p, ~p, ~p)~n", [Port, BindAddr, ServerName]),
-	start_phase(world, [], []),
-	start_phase(pg2, [], []),    
-	start_webtool([{port,Port},{bind_address,BindAddr},{server_name,ServerName}]),
-	ok;
+	start_webtool([{port,Port},{bind_address,BindAddr},{server_name,ServerName}]);
 
 start_webtool(Port, BindAddr, ServerName) ->
 	io:format("start_webtool(~p, ~p, ~p)~n", [Port, BindAddr, ServerName]),

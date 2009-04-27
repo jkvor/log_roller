@@ -7,6 +7,7 @@
 		log_roller_cache,
 		log_roller_filter,
 		lrb,
+		log_roller_web_server,
 		log_roller_webtool
     ]},
     {registered, []},

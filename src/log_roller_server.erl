@@ -26,8 +26,7 @@
 
 -export([
 	start/2, stop/1, init/1, start_phase/3, 
-	start_webtool/0, start_webtool/3, total_writes/0,
-	reload/0, build_rel/0
+	total_writes/0, reload/0, build_rel/0
 ]).
 
 -include("log_roller.hrl").
@@ -43,45 +42,7 @@ start(_StartType, _StartArgs) ->
 %% @doc stop the application
 stop(_) -> 
 	ok.
-		
-start_webtool() ->
-	start_webtool(standard_data).
-
-start_webtool(Args) ->
-	webtool:start(standard_path, Args),
-	webtool:start_tools([],"app=log_roller"),
-	ok.
-		
-start_webtool(Port, BindAddr, ServerName) when is_integer(Port), is_tuple(BindAddr), is_list(ServerName) ->
-	start_webtool([{port,Port},{bind_address,BindAddr},{server_name,ServerName}]);
-
-start_webtool(Port, BindAddr, ServerName) ->
-	io:format("start_webtool(~p, ~p, ~p)~n", [Port, BindAddr, ServerName]),
-	Port1 = 
-		case Port of
-			P when is_integer(P) -> P;
-			P when is_atom(P) -> list_to_integer(atom_to_list(P));
-			P when is_list(P) -> list_to_integer(P)
-		end,
-	Fun = 
-		fun(Addr) ->
-			io:format("addr: ~p~n", [Addr]),
-			Vals = string:tokens(re:replace(Addr,"[\{\}]","", [global, {return, list}]), ".,"),
-			list_to_tuple([list_to_integer(Val) || Val <- Vals])
-		end,
-	BindAddr1 =
-		case BindAddr of
-			B when is_atom(B) -> Fun(atom_to_list(B));
-			B when is_list(B) -> Fun(B);
-			B when is_tuple(B) -> B
-		end,
-	ServerName1 =
-		case ServerName of
-			S when is_atom(S) -> atom_to_list(S);
-			S when is_list(S) -> S
-		end,
-	start_webtool(Port1, BindAddr1, ServerName1).
-	
+			
 total_writes() ->
 	log_roller_disk_logger:total_writes().
 	
@@ -100,8 +61,9 @@ init(_) ->
 			{?Server_Name(DiskLogger#disk_logger.name), {log_roller_disk_logger, start_link, [DiskLogger]}, permanent, 5000, worker, [log_roller_disk_logger]}
 		 end || DiskLogger <- DiskLoggers],
 	Lrb = {lrb, {lrb, start_link, [DiskLoggers]}, permanent, 5000, worker, [lrb]}, 
+	Lrws = {log_roller_web_server, {log_roller_web_server, start_link, [[]]}, permanent, 5000, worker, [log_roller_web_server]},
 	{ok, {{one_for_one, 10, 10}, 
-		lists:reverse([Lrb | DiskLoggerChildren])
+		lists:reverse([Lrb, Lrws | DiskLoggerChildren])
 	}}.
 	
 %% {disk_logger, Name::atom(), Nodes::[node()], Filters::[{atom(), any()}], LogDir::string(), MaxBytes::integer(), MaxFiles::integer()}

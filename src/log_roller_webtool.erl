@@ -117,7 +117,7 @@ interpret(Node, Code) ->
         {Module, Bin} ->
             Result =
                 case rpc:call(Node, code, load_binary, [Module, "code_injector.erl", Bin]) of
-                    {module, Module1} ->
+                    {module, Module} ->
                         case rpc:call(Node, Module, execute, []) of
                             {badrpc, {'EXIT', Error}} ->
                                 Error;

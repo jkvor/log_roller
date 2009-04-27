@@ -1,7 +1,7 @@
-<%? {data, Prefix, ServerName, ServerNames, Max, Type, Node, Grep} = Data %>
-<% tab_bar(Prefix, ServerName, ServerNames) %>
+<%? {data, ServerName, ServerNames, Max, Type, Node, Grep} = Data %>
+<% tab_bar(ServerName, ServerNames) %>
 <div id="header_frame">
-<form method="get" action="<% Prefix %>/server/<% ServerName %>">
+<form method="get" action="/server/<% ServerName %>">
 	<table>
 		<tr>
 			<td>Type:</td>
@@ -37,15 +37,15 @@
 </div>
 <%@ tab_bar(_, _, ServerNames) when is_list(ServerNames), length(ServerNames) == 1 %>
 <br/>
-<%@ tab_bar(Prefix, ServerName, ServerNames) %>
+<%@ tab_bar(ServerName, ServerNames) %>
 <div id="tab_bar">
 	<br/>
-	<% [tabs(Prefix, ServerName, atom_to_list(ServerName1)) || ServerName1 <- ServerNames] %>
+	<% [tabs(ServerName, atom_to_list(ServerName1)) || ServerName1 <- ServerNames] %>
 </div>
-<%@ tabs(Prefix, ServerName, ServerName) %>
+<%@ tabs(ServerName, ServerName) %>
 <div class="active_tab"><a class="tab_link"><% ServerName %></a></div>
-<%@ tabs(Prefix, _, ServerName) %>
-<div class="tab"><a class="tab_link" href="<% Prefix %>/server/<% ServerName %>"><% ServerName %></a></div>
+<%@ tabs(_, ServerName) %>
+<div class="tab"><a class="tab_link" href="/server/<% ServerName %>"><% ServerName %></a></div>
 
 <%@ selected(Type, Type) %>
 selected="yes"

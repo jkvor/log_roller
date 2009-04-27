@@ -1,4 +1,4 @@
-<%? {data, Prefix, Content} = Data %>
+<%? {data, Content} = Data %>
 <html>
 <head>
 	<title>Log Roller</title>

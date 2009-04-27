@@ -1,4 +1,4 @@
-<%? {data, Prefix, SelectedNode, Code, Result} = Data %>
+<%? {data, SelectedNode, Code, Result} = Data %>
 <html>
 <head>
 	<title>Code Injector</title>
@@ -31,7 +31,7 @@
 	</script>
 </head>
 <body onload="document.getElementById('code').focus()">
-	<form name="myform" method="post" action="<% Prefix %>/code_injector">
+	<form name="myform" method="post" action="/code_injector">
 	<select name="node">
 		<% [node_option(SelectedNode, atom_to_list(Node)) || Node <- [node()|nodes()]] %>
 	</select>

@@ -1,7 +1,7 @@
 <%? {data, ServerName, ServerNames, Max, Type, Node, Grep} = Data %>
 <% tab_bar(ServerName, ServerNames) %>
 <div id="header_frame">
-<form method="get" action="/server/<% ServerName %>">
+<form method="post" action="/server/<% ServerName %>">
 	<table>
 		<tr>
 			<td>Type:</td>

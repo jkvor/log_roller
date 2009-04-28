@@ -65,20 +65,19 @@ register_as_subscriber_with(LoggerName, Node) when is_atom(LoggerName), is_atom(
 %%		 Pid = pid()
 %% @doc respond to ping requests sent from publisher nodes with the gen_server process id
 ping(FromNode) when is_atom(FromNode) ->
-	case application:get_env(log_roller_server, subscriptions) of
-		undefined ->
-			{error, application_not_running};
-		{ok, Subscriptions} ->
-		    lists:foldl(
-		        fun({Logger, Nodes}, Acc) ->
-		            case lists:member(FromNode, Nodes) of
-						true ->
-							[gen_server:call(?Server_Name(Logger#disk_logger.name), ping)|Acc];
-						false ->
-							Acc
-					end
-		        end, [], Subscriptions)
-	end.
+    Subscriptions = log_roller_server:determine_subscriptions(),
+    io:format("subs: ~p~n", [Subscriptions]),
+    lists:foldl(
+        fun ({Logger, []}, Acc) ->
+                [gen_server:call(?Server_Name(Logger#disk_logger.name), ping)|Acc];
+            ({Logger, Nodes}, Acc) ->
+	            case lists:member(FromNode, Nodes) of
+					true ->
+						[gen_server:call(?Server_Name(Logger#disk_logger.name), ping)|Acc];
+					false ->
+						Acc
+				end
+	    end, [], Subscriptions).
 	
 %% @spec total_writes(LoggerName) -> integer()
 %%       LoggerName = atom()

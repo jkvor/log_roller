@@ -26,7 +26,8 @@
 
 -export([
 	start/2, stop/1, init/1, start_phase/3, 
-	total_writes/0, reload/0, build_rel/0
+	total_writes/0, determine_subscriptions/0, 
+	compile_templates/0, reload/0, build_rel/0
 ]).
 
 -include("log_roller.hrl").
@@ -42,7 +43,13 @@ start(_StartType, _StartArgs) ->
 %% @doc stop the application
 stop(_) -> 
 	ok.
-			
+	
+compile_templates() ->
+  {ok, Filenames} = file:list_dir("templates"),
+  [erltl:compile("templates/" ++ Filename, [{outdir, "ebin"}, report_errors, report_warnings, nowarn_unused_vars]) 
+    || Filename <- Filenames],
+  ok.
+  		
 total_writes() ->
 	log_roller_disk_logger:total_writes().
 	
@@ -52,10 +59,7 @@ total_writes() ->
 
 %% @hidden
 init(_) ->
-	ok = application:unset_env(?MODULE, disk_loggers),
-	ok = application:unset_env(?MODULE, subscriptions),
 	DiskLoggers = get_disk_loggers_from_config(),
-	ok = application:set_env(?MODULE, disk_loggers, DiskLoggers),
 	DiskLoggerChildren =
 		[begin
 			{?Server_Name(DiskLogger#disk_logger.name), {log_roller_disk_logger, start_link, [DiskLogger]}, permanent, 5000, worker, [log_roller_disk_logger]}
@@ -141,12 +145,13 @@ start_phase(world, _, _) ->
 	
 %% @hidden
 start_phase(discovery, _, _) ->
-	{ok, DiskLoggers} = application:get_env(?MODULE, disk_loggers),
-	Subscriptions = determine_subscriptions(DiskLoggers, [node()|nodes()], []),
-	ok = application:set_env(?MODULE, subscriptions, Subscriptions),
+	Subscriptions = determine_subscriptions(),
 	spawn(fun() -> register_as_subscriber(Subscriptions) end),
 	ok.
 
+determine_subscriptions() ->
+    determine_subscriptions(get_disk_loggers_from_config(), [node()|nodes()], []).
+    
 %% [{disk_logger(), [node()]}]
 determine_subscriptions([], _, Acc) -> Acc;
 

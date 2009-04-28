@@ -5,8 +5,6 @@ Nodes designated as publishers broadcast log messages sent to the
 error_logger to nodes designated as subscribers.  The subscriber
 writes the log message to a rotating disk log similar to the SASL
 error_logger_mf_maxbytes and error_logger_mf_maxfiles functionality.
-The subscriber also contains a log browser and a pre-configured 
-webtool interface for monitoring logging in a browser.
 
 Publishers and subscribers perform auto-discovery upon booting.
 During startup, nodes of either type (publisher or subscriber)
@@ -70,8 +68,7 @@ directory.  This will be installed to the priv directory in the
 log_roller lib directory inside your otp root directory. For
 instance: /usr/lib/erlang/lib/log_roller-0.1/priv/log_roller.config.
 This contains the path to the log directory as well as max file size
-and number of rotating log files.  It also contains arguments for
-starting webtool.
+and number of rotating log files.
 
 == LICENSE ==
 
@@ -103,5 +100,4 @@ OTHER DEALINGS IN THE SOFTWARE.
   parsing logs
 * filter logs
 * read index file instead of asking disk_log where current head is
-* add to webtool results number of terms and paging capability
 * add code coverage target

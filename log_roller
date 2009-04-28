@@ -28,30 +28,6 @@ start_server() {
 	erl -detached -name log_roller@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_server -noshell $(get_sasl)
 }
 
-dev_webtool() {
-	if [ -z "${ARG1}" ] && [ -z "${ARG2}" ] && [ -z "${ARG3}" ]; then
-		erl -pa ebin -name webtool@$HOSTNAME +W w +A 1 -config priv/dev -boot bin/log_roller_server -eval "log_roller_server:start_webtool()"
-	else
-		erl -pa ebin -name webtool@$HOSTNAME +W w +A 1 -config priv/dev -boot bin/log_roller_server -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})"
-	fi
-}
-
-console_webtool() {
-	if [ -z "${ARG1}" ] || [ -z "${ARG2}" ] || [ -z "${ARG3}" ]; then
-		echo -e "Invalid webtool args: <port> <bindaddr> <servername>"
-	else
-		erl -name webtool@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_server -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})"
-	fi
-}
-
-start_webtool() {
-	if [ -z "${ARG1}" ] || [ -z "${ARG2}" ] || [ -z "${ARG3}" ]; then
-		echo -e "Invalid webtool args: <port> <bindaddr> <servername>"
-	else
-		erl -name webtool@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_server -eval "log_roller_server:start_webtool(${ARG1}, ${ARG2}, ${ARG3})" -noshell -detached
-	fi
-}
-
 dev(){
         if [ -z "${APP}" ] || [ -z "`type dev_${APP} 2>/dev/null`" ]; then
                 echo -e "Invalid application for dev: ${APP}"
@@ -77,7 +53,7 @@ start(){
 }
 
 if [ -z "${1}" ] || [ -z "`type $1 2>/dev/null`" ]; then
-        echo "usage:\t`basename $0` dev server\n\t`basename $0` console server\n\t`basename $0` start server\n\t`basename $0` console webtool <port> <bindaddr> <servername>\n\t`basename $0` start webtool <port> <bindaddr> <servername>"
+        echo "usage:\t`basename $0` dev server\n\t`basename $0` console server\n\t`basename $0` start server\n\t`basename $0`"
 else
         ${1}
 fi

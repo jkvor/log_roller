@@ -2,4 +2,4 @@
 @copyright 2009 Jacob Vorreuter
 @version 0.2
 @title log_roller
-@doc A pub/sub modeled, distributed Erlang logging system bundled with a report browser and webtool interface
+@doc A pub/sub modeled, distributed Erlang logging system

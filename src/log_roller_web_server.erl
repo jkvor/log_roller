@@ -49,7 +49,7 @@ dispatch(_Req, ['GET', "server"]) ->
 	ServerName = lists:nth(1, lrb:disk_logger_names()),
 	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
 	
-dispatch(Req, ['GET', "server", ServerName]) ->
+dispatch(Req, [_, "server", ServerName]) ->
 	{reply, ?MODULE, load_server, [Req:parse_post(), ServerName]};
 	
 dispatch(Req, [_, "code_injector"]) ->
@@ -59,6 +59,7 @@ dispatch(_, _) ->
 	undefined.
 	
 load_server(Opts0, ServerName) ->
+    io:format("load_server: ~p~n", [Opts0]),
 	Opts = dict:to_list(lists:foldl(
 		fun ({_, []}, Dict) ->
 				Dict;

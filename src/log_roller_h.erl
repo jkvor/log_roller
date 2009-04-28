@@ -104,6 +104,7 @@ handle_event(_, State) ->
 %% @hidden                   
 %%----------------------------------------------------------------------
 handle_call({subscribe, Pid0}, State) ->
+    io:format("subscribe for pid0 ~p~n", [Pid0]),
 	Pid = pid_to_list(Pid0),
 	Pids = State#state.listening_pids,
 	State1 =
@@ -164,13 +165,21 @@ get_node(Other) ->
 	end.
 	
 commit(State, Log) ->
-	ok = broadcast(Log, State#state.listening_pids),
-	{ok, State}.
+	Pids = broadcast(Log, State#state.listening_pids),
+	{ok, State#state{listening_pids=Pids}}.
 
-broadcast(_, []) -> ok;
-broadcast(Log, [Pid|Tail]) when is_list(Pid) ->
-	list_to_pid(Pid) ! {log_roller, self(), Log},
-	broadcast(Log, Tail).
+broadcast(Log, Pids) when is_list(Pids) ->
+    lists:foldl(
+        fun(Pid, Acc) ->
+            case catch list_to_pid(Pid) of
+        	    RealPid when is_pid(RealPid) ->
+        	        RealPid ! {log_roller, self(), Log},
+        	        [Pid|Acc];
+        	    Other ->
+        	        io:format("bad pid (~p) in list: ~p~n", [Pid, Other]),
+        	        Acc
+        	end
+        end, [], Pids).
 
 msg(Format, Args) ->
 	lists:flatten(io_lib:format(Format, Args)).

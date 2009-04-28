@@ -52,6 +52,10 @@ dispatch(_Req, ['GET', "server"]) ->
 dispatch(Req, [_, "server", ServerName]) ->
 	{reply, ?MODULE, load_server, [Req:parse_post(), ServerName]};
 	
+dispatch(Req, ['GET', "log_roller", "log_roller_webtool", "index"]) ->
+    ServerName = lists:nth(1, lrb:disk_logger_names()),
+	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
+	
 dispatch(Req, [_, "code_injector"]) ->
 	{reply, ?MODULE, inject_code, [Req:parse_post()]};
 	

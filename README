@@ -3,7 +3,7 @@ log_roller is a distributed logging solution for broadcasting
 log messages to designated disk logger nodes in real-time.
 
 == GETTING STARTED ==
-* Download the latest stable package <http://jacobvorreuter.github.com/log_roller/log_roller-0.2.tar.gz>
+* Download the latest stable package <http://jacobvorreuter.github.com/log_roller/log_roller-0.2.tgz>
 * install dependencies found in dependencies directory
 * untar, make, make install
 * start the log_roller application from a node

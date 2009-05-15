@@ -37,7 +37,7 @@
 	</select>
 	<br/>
 	<br/>
-	<textarea onkeypress="return captureKeys(event);" name="code" id="code" style="width: 600px; height: 200px;"></textarea>
+	<textarea onkeypress="return captureKeys(event);" name="code" id="code" style="width: 600px; height: 200px;"><% Code %></textarea>
 	</form>
 	<br/>
 	<pre><% Result %></pre>

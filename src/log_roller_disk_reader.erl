@@ -112,7 +112,7 @@ get_cache_frame(LoggerName, Cache, true, Index, Pos) ->
 			case log_roller_cache:get(Cache, key({Index, Pos})) of
 				undefined -> undefined; %% cache frame does not exist
 				CacheEntry -> 
-					io:format("got from cache: ~p~n", [{Index, Pos}]),
+					error_logger:info_msg("got from cache: ~p~n", [{Index, Pos}]),
 					binary_to_term(CacheEntry)
 			end
 	end.
@@ -153,7 +153,7 @@ read_chunk_from_file(#continuation{state=State}=Cont) ->
 	end.
 	
 read_chunk_from_cache(#continuation{state=State}=Cont, CacheEntry) ->
-    %io:format("read from cache {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
+    %error_logger:info_msg("read from cache {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
     CacheState = CacheEntry#cache_entry.cstate,
     LTimestamp = CacheState#cstate.last_timestamp,
 	BinRem = CacheState#cstate.binary_remainder,
@@ -161,7 +161,7 @@ read_chunk_from_cache(#continuation{state=State}=Cont, CacheEntry) ->
 	{ok, Cont#continuation{state=State1}, CacheEntry#cache_entry.terms}.
 	
 read_file(#continuation{properties=Props, state=State}) ->
-    %io:format("read from file {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
+    %error_logger:info_msg("read from file {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
 	FileName = lists:flatten(io_lib:format("~s.~w", [Props#cprops.file_stub, State#cstate.index])),
 	case file_handle(State#cstate.cache, FileName) of
 		{ok, IoDevice} ->
@@ -267,7 +267,7 @@ parse_terms(<<16#FF:8, 16#FF:8, 16#FF:8, 16#FF:8, LogSize:16/integer, Rest/binar
 					Term = binary_to_term(Log),
 					parse_terms(Tail, Rem, [Term|Acc], Term#log_entry.time);
 				_ ->
-					io:format("bad binary data: ~n~p~n", [Bin]),
+					error_logger:info_msg("bad binary data: ~n~p~n", [Bin]),
 					{error, bad_binary_data_format}
 			end;
 		true ->

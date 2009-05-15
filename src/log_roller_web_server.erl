@@ -30,9 +30,7 @@
 
 start_link(Args) when is_list(Args) ->
 	Args1 = set_app_values([address, port, doc_root], Args),
-	R = web_server:start(?MODULE, Args1),
-	io:format("result of start: ~p~n", [R]),
-	R.
+	web_server:start(?MODULE, Args1).
 
 %%====================================================================
 %% web_server callbacks
@@ -51,8 +49,12 @@ dispatch(_Req, ['GET', "server"]) ->
 	
 dispatch(Req, [_, "server", ServerName]) ->
 	{reply, ?MODULE, load_server, [Req:parse_post(), ServerName]};
+
+dispatch(_Req, ['GET']) ->
+    ServerName = lists:nth(1, lrb:disk_logger_names()),
+	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
 	
-dispatch(Req, ['GET', "log_roller", "log_roller_webtool", "index"]) ->
+dispatch(_Req, ['GET', "log_roller", "log_roller_webtool", "index"]) ->
     ServerName = lists:nth(1, lrb:disk_logger_names()),
 	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
 	
@@ -63,7 +65,7 @@ dispatch(_, _) ->
 	undefined.
 	
 load_server(Opts0, ServerName) ->
-    io:format("load_server: ~p~n", [Opts0]),
+    error_logger:info_msg("load_server: ~p~n", [Opts0]),
 	Opts = dict:to_list(lists:foldl(
 		fun ({_, []}, Dict) ->
 				Dict;
@@ -80,7 +82,7 @@ load_server(Opts0, ServerName) ->
 	Result =
 		case (catch lrb:fetch(list_to_atom(ServerName), Opts)) of
 			List when is_list(List) ->
-				%io:format("fetch success: ~p~n", [List]),
+				%error_logger:info_msg("fetch success: ~p~n", [List]),
 				Header = lr_header:render({data, ServerName, lrb:disk_logger_names(),
 							proplists:get_value("max", Opts0, ""), 
 							proplists:get_value("type", Opts0, "all"), 

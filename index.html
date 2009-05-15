@@ -1,68 +1,85 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
 	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-
 	<title>JacobVorreuter/log_roller @ GitHub</title>
-	
 	<style type="text/css">
+		
 		body {
-  		margin-top: 1.0em;
-  		background-color: #EDEEFE;
-		  font-family: "helvetica"; 
-  		color: #000000;
-    }
-    #container {
-      margin: 0 auto;
-      width: 700px;
-    }
-		h1 { font-size: 3.8em; color: #832819; margin-bottom: 3px; }
+	  		margin-top: 1.0em;
+	  		background-color: #EDEEFE;
+			font-family: "helvetica"; 
+	  		color: #000000;
+		}
+		
+    	#container {
+			margin: 0 auto;
+			width: 800px;
+		}
+		
+		.download { float: right; padding-top: 5px; padding-right: 10px; }
+		.header { background: #CDDDFC; padding-top: 3px; padding-bottom: 10px; padding-left: 15px; }
+		.description { font-size: 1.2em; margin-top: 12px; font-style: italic;}
+		.footer { text-align:center; padding-top:30px; font-style: italic; }
+		
+		h1 { font-size: 3.8em; color: #832819; margin-bottom: 3px; margin-top: 3px; }
 		h1 .small { font-size: 0.4em; }
 		h1 a { text-decoration: none }
 		h2 { font-size: 1.5em; color: #832819; }
-    h3 { text-align: right; color: #832819; }
-    a { color: #832819; }
-    .description { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: italic;}
-    .download { float: right; }
+		h3 { text-align: center; color: #000000; font-size: 1.5em;}
+		h4 { text-align: right; color: #832819; }
+		
+		a { color: #832819; }
 		pre { background: #000; color: #fff; padding: 15px;}
-    hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
-    .footer { text-align:center; padding-top:30px; font-style: italic; }
-	</style>
-	
-</head>
+		hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
 
+	</style>
+</head>
 <body>
 <a href="http://github.com/JacobVorreuter/log_roller"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
+	<div id="container">
+		<div class="download">
+			<a href="log_roller-0.2.tgz">
+				<img border="0" width="90" src="http://github.com/images/modules/download/tar.png">
+			</a>
+		</div>
 
-<div id="container">
+		<div class="header">
+			<h1>
+				<a href="http://github.com/JacobVorreuter/log_roller">log_roller</a> 
+				<span class="small">by <a href="http://twitter.com/jacobvorreuter">Jacob Vorreuter</a></small>
+			</h1>
+			<div class="description">
+				A distributed Erlang publishing and logging system
+			</div>
+		</div>
 
-<div class="download">
-	<!--a href="http://github.com/JacobVorreuter/log_roller/zipball/master">
-		<img border="0" width="90" src="http://github.com/images/modules/download/zip.png">
-	</a-->
-	<a href="log_roller-0.2.tgz">
-		<img border="0" width="90" src="http://github.com/images/modules/download/tar.png">
-	</a>
+<br/><br/>
+<!--h3>Distributed logging in the Erlang cloud</h3-->
+<p>
+<img src="node-diagram.png" align="left"/>
+<div style="padding-top: 60px;">
+Connected Erlang nodes can act as log publishers, consumers or both. 
+Publishers are responsible for broadcasting log messages that pass through their error_logger to any listening nodes.  
+Consumers are responsible for logging messages they receive to disk via the disk_log module. 
+Starting the log_roller application registers the log_roller_h report handler with the error_logger event manager. 
+The log_roller_h gen_event server receives error_logger messages and passes them to connected consumer nodes.
+Consumer nodes are identified by the presence of a running log_roller_disk_logger server, which is started when
+the log_roller_server application starts. 
+<%--Both publisher and consumer nodes perform an auto-discovery routine that involves pinging connected nodes to establish publisher/consumer relationships.--%>
+
 </div>
+</p>
 
-<h1>
-	<a href="http://github.com/JacobVorreuter/log_roller">log_roller</a> 
-	<span class="small">by <a href="http://twitter.com/jacobvorreuter">JacobVorreuter</a></small>
-</h1>
-
-<div class="description">
-	A pub/sub modeled, distributed Erlang logging system bundled with a report browser and webtool interface
-</div>
+<br/>
+<a href="screenshot1.png"><img src="screenshot1.png" width="600px"/></a>
 
 <h3>
 	<a href="http://github.com/JacobVorreuter/log_roller" style="text-decoration: none;">Source</a> &#149;
 	<a href="doc/index.html" style="text-decoration: none;">API Docs</a>
 	<hr style="width: 100%;"/>
 </h3>
-
-<a href="screenshot1.png"><img src="screenshot1.png" width="400px"/></a>
 
 <h2>About</h2>
 <p>log_roller is based on a publisher/subscriber model. It integrates

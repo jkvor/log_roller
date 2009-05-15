@@ -22,7 +22,6 @@ install: rel
 	for i in ebin/*.beam include/* priv/* ebin/*.app; do install $$i $(prefix)/$(LIBDIR)/log_roller-$(VERSION)/$$i ; done
 	cp bin/*.boot $(prefix)/$(ROOTDIR)/bin/
 	@mkdir -p $(prefix)/etc/init.d
-	mkdir -p $(prefix)/var/log/log_roller
 	cp log_roller $(prefix)/etc/init.d/
 
 uninstall:
@@ -31,7 +30,7 @@ uninstall:
 	rm /etc/init.d/log_roller*
 
 package: clean
-	@mkdir log_roller-$(VERSION)/ && cp -rf bin ebin include log_roller Makefile priv README src t templates log_roller-$(VERSION)
+	@mkdir log_roller-$(VERSION)/ && cp -rf bin dependencies doc ebin include log_roller Makefile priv public README src t templates log_roller-$(VERSION)
 	@COPYFILE_DISABLE=true tar zcf log_roller-$(VERSION).tgz log_roller-$(VERSION)
 	@rm -rf log_roller-$(VERSION)/
 

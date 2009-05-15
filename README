@@ -4,12 +4,17 @@ log messages to designated disk logger nodes in real-time.
 
 == GETTING STARTED ==
 * Download the latest stable package <http://jacobvorreuter.github.com/log_roller/log_roller-0.2.tar.gz>
+* install dependencies found in dependencies directory
 * untar, make, make install
 * start the log_roller application from a node
 	1> application:start(log_roller).
 * start a log_roller server node from the shell
 	$> ./log_roller console server
 * visit http://127.0.0.1:8888
+
+== DEPENDENCIES ==
+Judy >= 1.0.4: http://judy.sourceforge.net/
+Cherly http://github.com/cliffmoon/cherly
 
 == TERMINOLOGY ==
 Publisher node: a node running the log_roller application that

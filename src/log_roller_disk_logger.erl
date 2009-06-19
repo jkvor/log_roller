@@ -66,7 +66,6 @@ register_as_subscriber_with(LoggerName, Node) when is_atom(LoggerName), is_atom(
 %% @doc respond to ping requests sent from publisher nodes with the gen_server process id
 ping(FromNode) when is_atom(FromNode) ->
     Subscriptions = log_roller_server:determine_subscriptions(),
-    error_logger:info_msg("subs: ~p~n", [Subscriptions]),
     lists:foldl(
         fun ({Logger, []}, Acc) ->
                 [gen_server:call(?Server_Name(Logger#disk_logger.name), ping)|Acc];

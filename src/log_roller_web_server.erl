@@ -23,14 +23,15 @@
 -module(log_roller_web_server).
 -behaviour(web_server).
 
--export([start_link/1, load_server/2, inject_code/1]).
+-export([start_link/1, load_server/3]).
 
 %% web_server callbacks
 -export([dispatch/2]).
 
 start_link(Args) when is_list(Args) ->
 	Args1 = set_app_values([address, port, doc_root], Args),
-	web_server:start(?MODULE, Args1).
+	Result = web_server:start(?MODULE, Args1),
+	io:format("res j~p~n", [Result]), Result.
 
 %%====================================================================
 %% web_server callbacks
@@ -43,28 +44,25 @@ start_link(Args) when is_list(Args) ->
 %%			 Req = mochiweb_request()
 %%			 PathTokens = list()
 %%--------------------------------------------------------------------	
-dispatch(_Req, ['GET', "server"]) ->
+dispatch(Req, ['GET', "server"]) ->
 	ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
+	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
 	
 dispatch(Req, [_, "server", ServerName]) ->
-	{reply, ?MODULE, load_server, [Req:parse_post(), ServerName]};
+	{reply, ?MODULE, load_server, [Req, Req:parse_post(), ServerName]};
 
-dispatch(_Req, ['GET']) ->
+dispatch(Req, ['GET']) ->
     ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
+	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
 	
-dispatch(_Req, ['GET', "log_roller", "log_roller_webtool", "index"]) ->
+dispatch(Req, ['GET', "log_roller", "log_roller_webtool", "index"]) ->
     ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
-	
-% dispatch(Req, [_, "code_injector"]) ->
-%   {reply, ?MODULE, inject_code, [Req:parse_post()]};
+	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
 	
 dispatch(_, _) ->
 	undefined.
 	
-load_server(Opts0, ServerName) ->
+load_server(Req, Opts0, ServerName) ->
     error_logger:info_msg("load_server: ~p~n", [Opts0]),
 	Opts = dict:to_list(lists:foldl(
 		fun ({_, []}, Dict) ->
@@ -94,36 +92,8 @@ load_server(Opts0, ServerName) ->
 				error_logger:error_report({?MODULE, display, Err}),
 	            lists:flatten(io_lib:format("~p~n", [Err]))
 		end,
-	{reply, 200, [{"Content-Type", "text/html"}], Result}.
-	
-inject_code([]) ->
-	{reply, 200, [{"Content-Type", "text/html"}], lr_code_injector:render({data, "", "", ""})};
-	
-inject_code(Args) ->
-	Node = proplists:get_value("node", Args),
-	Code = proplists:get_value("code", Args),
-	Response =
-		case catch dynamic_compile:from_string("-module(code_injector).\n-compile(export_all).\nexecute() -> \n" ++ Code ++ "\n") of
-	        {'EXIT', Error} ->
-	            lists:flatten(io_lib:format("error encountered: ~p~n", [Error]));
-	        {Module, Bin} ->
-	            Result =
-	                case rpc:call(list_to_atom(Node), code, load_binary, [Module, "code_injector.erl", Bin]) of
-	                    {module, Module} ->
-	                        case rpc:call(list_to_atom(Node), Module, execute, []) of
-	                            {badrpc, {'EXIT', Error}} ->
-	                                Error;
-	                            Other ->
-	                                Other
-	                        end;
-	                    {error, Reason} ->
-	                        {error, Reason}
-	                end,
-	            lists:flatten(io_lib:format("~p~n", [Result]));
-	        Other ->
-	            lists:flatten(io_lib:format("error encountered: ~p~n", [Other]))
-	    end,
-	{reply, 200, [{"Content-Type", "text/html"}], lr_code_injector:render({data, Node, Code, Response})}.
+	Req:respond({200, [{"Content-Type", "text/html"}], Result}),
+	noreply.
 
 %% internal functions
 set_app_values([], Args) -> Args;

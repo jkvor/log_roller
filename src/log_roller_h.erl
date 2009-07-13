@@ -103,12 +103,14 @@ handle_event(_, State) ->
 %%          {remove_handler, Reply}         
 %% @hidden                   
 %%----------------------------------------------------------------------
-handle_call({subscribe, Pid0}, State) when is_pid(Pid0) ->
+handle_call({subscribe, Pid0}, State) ->
+    io:format("subscribe for pid0 ~p~n", [Pid0]),
 	Pid = pid_to_list(Pid0),
 	Pids = State#state.listening_pids,
 	State1 =
 		case lists:member(Pid, Pids) of
 			false ->
+				io:format("registering pid ~p~n", [Pid]),
 				State#state{listening_pids=[Pid|Pids]};
 			true ->
 				State
@@ -119,8 +121,9 @@ handle_call(subscribers, State) ->
 	{ok, State#state.listening_pids, State};
 	
 handle_call(_Request, State) ->
-	error_logger:info_msg("handle other call: ~p~n", [_Request]),
-    {ok, ok, State}.
+	io:format("handle other call: ~p~n", [_Request]),
+    Reply = ok,
+    {ok, Reply, State}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_info/2
@@ -137,7 +140,7 @@ handle_info(_Info, State) ->
 %% @hidden
 %%----------------------------------------------------------------------
 terminate(_Reason, _State) ->
-    error_logger:add_report_handler(?MODULE).
+    ok.
 
 %% @hidden
 code_change(_OldVsn, State, _Extra) ->
@@ -168,18 +171,15 @@ commit(State, Log) ->
 broadcast(Log, Pids) when is_list(Pids) ->
     lists:foldl(
         fun(Pid, Acc) ->
-            case (catch list_to_pid(Pid)) of
+            case catch list_to_pid(Pid) of
         	    RealPid when is_pid(RealPid) ->
         	        RealPid ! {log_roller, self(), Log},
         	        [Pid|Acc];
         	    Other ->
+        	        io:format("bad pid (~p) in list: ~p~n", [Pid, Other]),
         	        Acc
         	end
         end, [], Pids).
 
 msg(Format, Args) ->
-	case (catch lists:flatten(io_lib:format(Format, Args))) of
-	    {'EXIT', _} ->
-	        lists:flatten(io_lib:format("Format FAIL: io_lib:format(~p, ~p)", [Format, Args]));
-	    Msg -> Msg
-	end.
+	lists:flatten(io_lib:format(Format, Args)).

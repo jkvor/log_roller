@@ -87,14 +87,36 @@ delete_non_disk_loggers(Envs) ->
         
 get_disk_loggers_from_config([], Loggers) -> Loggers;
 	
-get_disk_loggers_from_config([{Key,Val}|Tail], Loggers) 
-when Key==log_dir; Key==filters; Key==cache_size; Key==maxbytes; Key==maxfiles ->
-    {Logger, Loggers1} = get_default_logger(Loggers),
-    Loggers2 = [populate_disk_logger_field(Key, Val, Logger)|Loggers1],
-    get_disk_loggers_from_config(Tail, Loggers2);
+get_disk_loggers_from_config([{log_dir, LogDir}|Tail], Loggers) when is_list(LogDir) ->
+	{Logger, Loggers1} = get_default_logger(Loggers),
+	Loggers2 = [Logger#disk_logger{log_dir=LogDir}|Loggers1],
+	get_disk_loggers_from_config(Tail, Loggers2);
+
+get_disk_loggers_from_config([{filters, Filters}|Tail], Loggers) when is_list(Filters) ->
+	{Logger, Loggers1} = get_default_logger(Loggers),
+	Loggers2 = [Logger#disk_logger{filters=Filters}|Loggers1],
+	get_disk_loggers_from_config(Tail, Loggers2);
+		
+get_disk_loggers_from_config([{cache_size, CacheSize}|Tail], Loggers) when is_integer(CacheSize) ->
+	{Logger, Loggers1} = get_default_logger(Loggers),
+	Loggers2 = [Logger#disk_logger{cache_size=CacheSize}|Loggers1],
+	get_disk_loggers_from_config(Tail, Loggers2);
+		
+get_disk_loggers_from_config([{maxbytes, Maxbytes}|Tail], Loggers) when is_integer(Maxbytes) ->
+	{Logger, Loggers1} = get_default_logger(Loggers),
+	Loggers2 = [Logger#disk_logger{maxbytes=Maxbytes}|Loggers1],
+	get_disk_loggers_from_config(Tail, Loggers2);
+	
+get_disk_loggers_from_config([{maxfiles, Maxfiles}|Tail], Loggers) when is_integer(Maxfiles) ->
+	{Logger, Loggers1} = get_default_logger(Loggers),
+	Loggers2 = [Logger#disk_logger{maxfiles=Maxfiles}|Loggers1],
+	get_disk_loggers_from_config(Tail, Loggers2);
 	
 get_disk_loggers_from_config([{Custom, Args}|Tail], Loggers) when is_atom(Custom), is_list(Args) ->	
-	Logger = populate_disk_logger_fields(#disk_logger{name=Custom}, [filters, log_dir, cache_size, maxbytes, maxfiles], Args),
+	Fields = record_info(fields, disk_logger),
+	Index = [I+1 || I <- lists:seq(1, length(Fields))],
+	Ref = lists:zip(Fields, Index),
+	Logger = populate_disk_logger_fields(#disk_logger{name=Custom}, [filters, log_dir, cache_size, maxbytes, maxfiles], Args, Ref),
 	get_disk_loggers_from_config(Tail, [Logger|Loggers]).
 
 get_default_logger(Loggers) ->
@@ -104,24 +126,18 @@ get_default_logger(Loggers) ->
 		false ->
 			{#disk_logger{}, Loggers}
 	end.
-	
-populate_disk_logger_fields(Logger, [], _) -> Logger;
 
-populate_disk_logger_fields(Logger, [Field|Tail], Args) ->
+populate_disk_logger_fields(Logger, [], _, _) -> Logger;
+
+populate_disk_logger_fields(Logger, [Field|Tail], Args, Ref) ->
 	case proplists:get_value(Field, Args) of
 		undefined ->
-			populate_disk_logger_fields(Logger, Tail, Args);
+			populate_disk_logger_fields(Logger, Tail, Args, Ref);
 		Value ->
-			Logger1 = populate_disk_logger_field(Field, Value, Logger),
-			populate_disk_logger_fields(Logger1, Tail, Args)
+			Index = proplists:get_value(Field, Ref),
+			Logger1 = erlang:setelement(Index, Logger, Value),
+			populate_disk_logger_fields(Logger1, Tail, Args, Ref)
 	end.
-	
-populate_disk_logger_field(Key, Val, Logger) when is_atom(Key), is_record(Logger, disk_logger) ->
-    Fields = record_info(fields, disk_logger),
-	Indexes = [I+1 || I <- lists:seq(1, length(Fields))],
-	Ref = lists:zip(Fields, Indexes),
-    Index = proplists:get_value(Key, Ref),
-	erlang:setelement(Index, Logger, Val).
 
 %% @hidden
 start_phase(pg2, _, _) ->

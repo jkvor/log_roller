@@ -37,7 +37,7 @@
 
 -include("log_roller.hrl").
 
--define(TIMEOUT, infinity).
+-define(TIMEOUT, 10000).
 
 %%====================================================================
 %% API
@@ -135,7 +135,7 @@ handle_cast(_Message, State) -> {noreply, State}.
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------	
-handle_info(_Info, State) -> error_logger:info_msg("info: ~p~n", [_Info]), {noreply, State}.
+handle_info(_Info, State) -> io:format("info: ~p~n", [_Info]), {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% Function: terminate(Reason, State) -> void()

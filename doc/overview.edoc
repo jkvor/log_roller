@@ -1,5 +1,0 @@
-@author Jacob Vorreuter <jacob.vorreuter@gmail.com>
-@copyright 2009 Jacob Vorreuter
-@version 0.2
-@title log_roller
-@doc A pub/sub modeled, distributed Erlang logging system

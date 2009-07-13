@@ -47,7 +47,7 @@ put(Cache, Key, Val) when is_tuple(Cache), is_list(Key), is_binary(Val) ->
 		true ->
 			ok;
 		Err ->
-			error_logger:info_msg("failed to place in cache ~p: ~p~n", [Key, Err]),
+			io:format("failed to place in cache ~p: ~p~n", [Key, Err]),
 			{error, cache_put_failed}
 	end;
 

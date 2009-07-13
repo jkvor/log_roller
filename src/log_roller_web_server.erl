@@ -23,15 +23,16 @@
 -module(log_roller_web_server).
 -behaviour(web_server).
 
--export([start_link/1, load_server/3]).
+-export([start_link/1, load_server/2, inject_code/1]).
 
 %% web_server callbacks
 -export([dispatch/2]).
 
 start_link(Args) when is_list(Args) ->
 	Args1 = set_app_values([address, port, doc_root], Args),
-	Result = web_server:start(?MODULE, Args1),
-	io:format("res j~p~n", [Result]), Result.
+	R = web_server:start(?MODULE, Args1),
+	io:format("result of start: ~p~n", [R]),
+	R.
 
 %%====================================================================
 %% web_server callbacks
@@ -44,26 +45,25 @@ start_link(Args) when is_list(Args) ->
 %%			 Req = mochiweb_request()
 %%			 PathTokens = list()
 %%--------------------------------------------------------------------	
-dispatch(Req, ['GET', "server"]) ->
+dispatch(_Req, ['GET', "server"]) ->
 	ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
+	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
 	
 dispatch(Req, [_, "server", ServerName]) ->
-	{reply, ?MODULE, load_server, [Req, Req:parse_post(), ServerName]};
-
-dispatch(Req, ['GET']) ->
-    ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
+	{reply, ?MODULE, load_server, [Req:parse_post(), ServerName]};
 	
 dispatch(Req, ['GET', "log_roller", "log_roller_webtool", "index"]) ->
     ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
+	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
+	
+dispatch(Req, [_, "code_injector"]) ->
+	{reply, ?MODULE, inject_code, [Req:parse_post()]};
 	
 dispatch(_, _) ->
 	undefined.
 	
-load_server(Req, Opts0, ServerName) ->
-    error_logger:info_msg("load_server: ~p~n", [Opts0]),
+load_server(Opts0, ServerName) ->
+    io:format("load_server: ~p~n", [Opts0]),
 	Opts = dict:to_list(lists:foldl(
 		fun ({_, []}, Dict) ->
 				Dict;
@@ -80,7 +80,7 @@ load_server(Req, Opts0, ServerName) ->
 	Result =
 		case (catch lrb:fetch(list_to_atom(ServerName), Opts)) of
 			List when is_list(List) ->
-				%error_logger:info_msg("fetch success: ~p~n", [List]),
+				%io:format("fetch success: ~p~n", [List]),
 				Header = lr_header:render({data, ServerName, lrb:disk_logger_names(),
 							proplists:get_value("max", Opts0, ""), 
 							proplists:get_value("type", Opts0, "all"), 
@@ -92,8 +92,36 @@ load_server(Req, Opts0, ServerName) ->
 				error_logger:error_report({?MODULE, display, Err}),
 	            lists:flatten(io_lib:format("~p~n", [Err]))
 		end,
-	Req:respond({200, [{"Content-Type", "text/html"}], Result}),
-	noreply.
+	{reply, 200, [{"Content-Type", "text/html"}], Result}.
+	
+inject_code([]) ->
+	{reply, 200, [{"Content-Type", "text/html"}], lr_code_injector:render({data, "", "", ""})};
+	
+inject_code(Args) ->
+	Node = proplists:get_value("node", Args),
+	Code = proplists:get_value("code", Args),
+	Response =
+		case catch dynamic_compile:from_string("-module(code_injector).\n-compile(export_all).\nexecute() -> \n" ++ Code ++ "\n") of
+	        {'EXIT', Error} ->
+	            lists:flatten(io_lib:format("error encountered: ~p~n", [Error]));
+	        {Module, Bin} ->
+	            Result =
+	                case rpc:call(list_to_atom(Node), code, load_binary, [Module, "code_injector.erl", Bin]) of
+	                    {module, Module} ->
+	                        case rpc:call(list_to_atom(Node), Module, execute, []) of
+	                            {badrpc, {'EXIT', Error}} ->
+	                                Error;
+	                            Other ->
+	                                Other
+	                        end;
+	                    {error, Reason} ->
+	                        {error, Reason}
+	                end,
+	            lists:flatten(io_lib:format("~p~n", [Result]));
+	        Other ->
+	            lists:flatten(io_lib:format("error encountered: ~p~n", [Other]))
+	    end,
+	{reply, 200, [{"Content-Type", "text/html"}], lr_code_injector:render({data, Node, Code, Response})}.
 
 %% internal functions
 set_app_values([], Args) -> Args;

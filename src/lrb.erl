@@ -37,7 +37,7 @@
 
 -include("log_roller.hrl").
 
--define(TIMEOUT, 10000).
+-define(TIMEOUT, infinity).
 
 %%====================================================================
 %% API

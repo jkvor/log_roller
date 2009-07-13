@@ -36,7 +36,7 @@
 %% @spec start(StartType, StartArgs) -> {ok, Pid}
 %% @doc start the application
 start(_StartType, _StartArgs) -> 
-	ok = error_logger:add_report_handler(log_roller_h, []),
+	ok = error_logger:add_report_handler(log_roller_h),
 	{ok, self()}.
 	
 %% @doc stop the application

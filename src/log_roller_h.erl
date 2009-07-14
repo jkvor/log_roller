@@ -65,7 +65,7 @@ handle_event({error_report, _Gleader, {Pid, std_error, Report}}, State) when is_
 	{ok, State1} = commit(State, #log_entry{type=error, node=get_node(Pid), time=erlang:now(), message=Report}),
 	{ok, State1};
 	
-handle_event({error_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid) ->
+handle_event({error_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid), is_atom(Type) ->
 	{ok, State1} = commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report}),
 	{ok, State1};
 	
@@ -77,7 +77,7 @@ handle_event({warning_report, _Gleader, {Pid, std_warning, Report}}, State) when
 	{ok, State1} = commit(State, #log_entry{type=warning, node=get_node(Pid), time=erlang:now(), message=Report}),
 	{ok, State1};
 		
-handle_event({warning_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid) ->
+handle_event({warning_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid), is_atom(Type) ->
 	{ok, State1} = commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report}),
 	{ok, State1};
 		
@@ -89,7 +89,7 @@ handle_event({info_report, _Gleader, {Pid, std_info, Report}}, State) when is_pi
 	{ok, State1} = commit(State, #log_entry{type=info, node=get_node(Pid), time=erlang:now(), message=Report}),
 	{ok, State1};
 		
-handle_event({info_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid) ->
+handle_event({info_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid), is_atom(Type) ->
 	{ok, State1} = commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report}),
 	{ok, State1};
 
@@ -152,7 +152,8 @@ package(warning_report) -> warning;
 package(progress_report) -> progress;
 package(supervisor_report) -> supervisor;
 package(crash_report) -> error;
-package(Other) -> Other.
+package(Atom) when is_atom(Atom) -> Atom;
+package(_) -> undefined.
 
 get_node(emulator) -> emulator;
 get_node(Other) -> 

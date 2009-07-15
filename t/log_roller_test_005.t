@@ -6,7 +6,7 @@
 %% * Test a wrapping and overwriting log
 %% =============================================================================
 main(_) ->
-    etap:plan(1),
+    etap:plan(unknown),
 
 
     etap:end_tests().

@@ -7,7 +7,7 @@
 %% * Test fetching correct number of logs with {max, none} and {max, Num}
 %% =============================================================================
 main(_) ->
-    etap:plan(11),
+    etap:plan(unknown),
 
 	log_roller_test:load_apps(),
 	put(log_dir, log_roller_test:rnd_dir()),

@@ -28,27 +28,22 @@
 
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
-
--record(cprops, {disk_logger_name, file_stub, chunk_size, size_limit, max_index, use_cache}).
--record(cstate, {index, position, last_timestamp, binary_remainder, cache}).
--record(continuation, {properties, state}).
--record(cache_entry, {cstate, terms}).
 		
 %%====================================================================
 %% API
 %%====================================================================
 
-%% @spec start_continuation(atom(), {cherly, post()}, true | false) -> {ok, continuation()} | {error, string()}
+%% @spec start_continuation(atom(), {cherly, post()}, true | false) -> {ok, continuation()}
 %% @doc fetch a continuation pointed to the log frame currently being written to
 start_continuation(LoggerName, Cache, UseCache) ->
 	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(LoggerName),
 	StartPos = snap_to_grid(Pos),
 	ChunkSize = Pos-StartPos,
 	Props = {cprops, LoggerName, FileStub, ChunkSize, SizeLimit, MaxIndex, UseCache},
-	State = {cstate, Index, StartPos, {9999,0,0}, <<>>, Cache},
+	State = {cstate, Index, StartPos, {9999,0,0}, <<>>, Cache, 0},
 	{ok, {continuation, Props, State}}.
 
-%% @spec invalidate_cache(atom(), {cherly, port()}, Index) -> ok | {error, string()}
+%% @spec invalidate_cache(atom(), {cherly, port()}, Index) -> ok
 %% @doc remove all cache entries that point to the file ending in Index
 invalidate_cache(LoggerName, Cache, Index) ->
 	Opts = log_roller_disk_logger:options(LoggerName),
@@ -56,26 +51,22 @@ invalidate_cache(LoggerName, Cache, Index) ->
 	Pos = snap_to_grid(SizeLimit),
 	invalidate_cache_frame(Cache, Index, Pos).
 
-%% @spec terms(Cont) -> {ok, Cont1, Terms} | {error, any()}	
+%% @spec terms(Cont) -> {ok, Cont1, Terms}
 %%		 Cont = continuation()
 %% @doc fetch the terms for the continuation passed in
 terms(Cont) ->
-	case read_chunk(Cont) of
-		{ok, Cont1, Terms} ->
-			Timestamp1 = (Cont1#continuation.state)#cstate.last_timestamp,
-			Timestamp2 = (Cont#continuation.state)#cstate.last_timestamp,
-			%% the continuation record stores the last timestamp it encountered
-			%% while traveling backward through the log files. If the timestamp
-			%% jumps foreward that means all log files have been traversed.
-			case is_full_cycle(Timestamp1, Timestamp2) of
-				true ->
-					{error, read_full_cycle};
-				false ->
-					{ok, Cont2} = rewind_location(Cont1),
-					{ok, Cont2, Terms}
-			end;
-		{error, Reason} ->
-			{error, Reason}
+	{ok, Cont1, Terms} = read_chunk(Cont),
+	Timestamp1 = (Cont1#continuation.state)#cstate.last_timestamp,
+	Timestamp2 = (Cont#continuation.state)#cstate.last_timestamp,
+	%% the continuation record stores the last timestamp it encountered
+	%% while traveling backward through the log files. If the timestamp
+	%% jumps foreward that means all log files have been traversed.
+	case is_full_cycle(Timestamp1, Timestamp2) of
+		true ->
+			exit({error, read_full_cycle});
+		false ->
+			{ok, Cont2} = rewind_location(Cont1),
+			{ok, Cont2, Terms}
 	end.
 
 %%--------------------------------------------------------------------
@@ -89,7 +80,7 @@ invalidate_cache_frame(Cache, Index, Pos) when Pos >= 0 ->
 	
 invalidate_cache_frame(_, _, _) -> ok.
 
-%% @spec read_chunk(Cont) -> {ok, Cont1, Terms} | {error, any()}
+%% @spec read_chunk(Cont) -> {ok, Cont1, Terms}
 %% @doc read a chunk either from cache or file
 %%	def chunk - a block of binary data containing erlang tuples (log_entry records)
 read_chunk(#continuation{properties=Props, state=State}=Cont) ->
@@ -132,25 +123,17 @@ is_current_location(LoggerName, Index, Pos) ->
 	end.
 	
 read_chunk_from_file(#continuation{state=State}=Cont) ->
-	case read_file(Cont) of
-		{ok, Chunk} ->
-			BinChunk = list_to_binary(Chunk),
-			BinRem = State#cstate.binary_remainder,
-			Bin = <<BinChunk/binary, BinRem/binary>>,
-			case parse_terms(Bin, <<>>, [], {9999,0,0}) of
-				{ok, Terms, BinRem1, LTimestamp1} ->
-				    Index = State#cstate.index,
-				    Pos = State#cstate.position,
-				    State1 = State#cstate{last_timestamp=LTimestamp1, binary_remainder=BinRem1},
-				    Cont1 = Cont#continuation{state=State1},
-					log_roller_cache:put(State#cstate.cache, key({Index, Pos}), term_to_binary({cache_entry, State1, Terms})),
-					{ok, Cont1, Terms};
-				{error, Reason} ->
-					{error, Reason}
-			end;
-		{error, Reason} ->
-			{error, Reason}
-	end.
+	{ok, Chunk} = read_file(Cont),
+	BinChunk = list_to_binary(Chunk),
+	BinRem = State#cstate.binary_remainder,
+	Bin = <<BinChunk/binary, BinRem/binary>>,
+	{ok, Terms, BinRem1, LTimestamp1} = parse_terms(Bin, <<>>, [], {9999,0,0}),
+    Index = State#cstate.index,
+    Pos = State#cstate.position,
+    State1 = State#cstate{last_timestamp=LTimestamp1, binary_remainder=BinRem1},
+    Cont1 = Cont#continuation{state=State1},
+	log_roller_cache:put(State#cstate.cache, key({Index, Pos}), term_to_binary({cache_entry, State1, Terms})),
+	{ok, Cont1, Terms}.
 	
 read_chunk_from_cache(#continuation{state=State}=Cont, CacheEntry) ->
     %error_logger:info_msg("read from cache {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
@@ -163,18 +146,14 @@ read_chunk_from_cache(#continuation{state=State}=Cont, CacheEntry) ->
 read_file(#continuation{properties=Props, state=State}) ->
     %error_logger:info_msg("read from file {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
 	FileName = lists:flatten(io_lib:format("~s.~w", [Props#cprops.file_stub, State#cstate.index])),
-	case file_handle(State#cstate.cache, FileName) of
-		{ok, IoDevice} ->
-			case file:pread(IoDevice, State#cstate.position, Props#cprops.chunk_size) of
-				{ok, Chunk} -> 
-					{ok, Chunk};
-				eof ->
-					{ok, []};
-				{error, Reason} -> 
-					{error, Reason}
-			end;
-		{error, Reason} ->
-			{error, Reason}
+	{ok, IoDevice} = file_handle(State#cstate.cache, FileName),
+	case file:pread(IoDevice, State#cstate.position, Props#cprops.chunk_size) of
+		{ok, Chunk} -> 
+			{ok, Chunk};
+		eof ->
+			{ok, []};
+		{error, Reason} -> 
+			exit({error, Reason})
 	end.
 	
 file_handle(Cache, FileName) ->
@@ -185,7 +164,7 @@ file_handle(Cache, FileName) ->
 					log_roller_cache:put(Cache, FileName, term_to_binary(IoDevice)),
 					{ok, IoDevice};
 				{error, Reason} ->
-					{error, Reason}
+					exit({error, Reason})
 			end;
 		IoDevice ->
 			{ok, binary_to_term(IoDevice)}
@@ -200,22 +179,18 @@ rewind_location(#continuation{properties=Props, state=State}=Cont) ->
 		%% file handle was left at beginning of file
 		Pos =:= 0 -> 
 			%% move to previous index file
-			case rewind_file_index(FileStub, Index, undefined, MaxIndex) of
-				{ok, FileSize, Index1} ->
-					{Pos1,ChunkSize1} =
-						if
-							FileSize > ?MAX_CHUNK_SIZE ->
-								P1 = snap_to_grid(FileSize),
-								{P1, (FileSize - P1)};
-							true ->
-								{0, ?MAX_CHUNK_SIZE}
-						end,
-					Props1 = Props#cprops{chunk_size=ChunkSize1},
-					State1 = State#cstate{index=Index1, position=Pos1},
-					{ok, Cont#continuation{properties=Props1, state=State1}};
-				{error, Reason} ->
-					{error, Reason}
-			end;
+			{ok, FileSize, Index1} = rewind_file_index(FileStub, Index, undefined, MaxIndex),
+			{Pos1,ChunkSize1} =
+				if
+					FileSize > ?MAX_CHUNK_SIZE ->
+						P1 = snap_to_grid(FileSize),
+						{P1, (FileSize - P1)};
+					true ->
+						{0, ?MAX_CHUNK_SIZE}
+				end,
+			Props1 = Props#cprops{chunk_size=ChunkSize1},
+			State1 = State#cstate{index=Index1, position=Pos1},
+			{ok, Cont#continuation{properties=Props1, state=State1}};
 		Pos =< ?MAX_CHUNK_SIZE -> %% less than one chunk left
 		    Props1 = Props#cprops{chunk_size=?MAX_CHUNK_SIZE},
 			State1 = State#cstate{position=0},
@@ -228,7 +203,7 @@ rewind_location(#continuation{properties=Props, state=State}=Cont) ->
 	end.	
 
 %% if Index and StartingIndex match then we've cycled all the way around
-rewind_file_index(_FileStub, Index, Index, _MaxIndex) -> {error, cannot_find_next_index};
+rewind_file_index(_FileStub, Index, Index, _MaxIndex) -> exit({error, cannot_find_next_index});
 
 rewind_file_index(FileStub, Index, StartingIndex, MaxIndex) ->
 	Index1 =
@@ -250,7 +225,7 @@ rewind_file_index(FileStub, Index, StartingIndex, MaxIndex) ->
 					rewind_file_index(FileStub, Index1, StartingIndex, MaxIndex)
 			end;
 		{error, Reason} ->
-			{error, Reason}
+			exit({error, Reason})
 	end.
 			
 %% @spec parse_terms(Bin, Rem, Acc, LTimestamp) -> Result
@@ -268,7 +243,7 @@ parse_terms(<<16#FF:8, 16#FF:8, 16#FF:8, 16#FF:8, LogSize:16/integer, Rest/binar
 					parse_terms(Tail, Rem, [Term|Acc], Term#log_entry.time);
 				_ ->
 					error_logger:info_msg("bad binary data: ~n~p~n", [Bin]),
-					{error, bad_binary_data_format}
+					exit({error, bad_binary_data_format})
 			end;
 		true ->
 			{ok, Acc, Bin, LTimestamp}
@@ -294,4 +269,4 @@ is_full_cycle({A1,B1,C1}, {A2,B2,C2}) ->
 key({A, B}) when is_integer(A), is_integer(B) -> 
 	lists:flatten(io_lib:format("~w_~w", [A,B]));
 key(_) ->
-	{error, unexpected_key}.
+	exit({error, unexpected_key}).

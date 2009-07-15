@@ -66,8 +66,9 @@ init(_) ->
 		 end || DiskLogger <- DiskLoggers],
 	Lrb = {lrb, {lrb, start_link, [DiskLoggers]}, permanent, 5000, worker, [lrb]}, 
 	Lrws = {log_roller_web_server, {log_roller_web_server, start_link, [[]]}, permanent, 5000, worker, [log_roller_web_server]},
+	Lrc = {log_roller_cache, {log_roller_cache, start_link, []}, permanent, 5000, worker, [log_roller_cache]},
 	{ok, {{one_for_one, 10, 10}, 
-		lists:reverse([Lrb, Lrws | DiskLoggerChildren])
+		[Lrc] ++ lists:reverse([Lrb, Lrws | DiskLoggerChildren])
 	}}.
 	
 %% {disk_logger, Name::atom(), Nodes::[node()], Filters::[{atom(), any()}], LogDir::string(), MaxBytes::integer(), MaxFiles::integer()}
@@ -188,22 +189,11 @@ reload() ->
 
 build_rel() ->
 	{ok, FD} = file:open("bin/log_roller_server.rel", [write]),
-	RootDir = code:root_dir(),
-	Patterns = [
-	    {RootDir ++ "/", "erts-*"},
-	    {RootDir ++ "/lib/", "kernel-*"},
-	    {RootDir ++ "/lib/", "stdlib-*"}
-	],
-	[Erts, Kerne, Stdl] = [begin
-	    [R | _ ] = filelib:wildcard(P, D),
-	    [_ | [Ra] ] = string:tokens(R, "-"),
-	    Ra
-	end || {D, P} <- Patterns],
 	RelInfo = {release,
 	    {"log_roller_server", "0.2"},
-	    {erts, Erts}, [
-	        {kernel, Kerne},
-	        {stdlib, Stdl},
+	    {erts, "5.7.1"}, [
+	        {kernel, "2.13.1"},
+	        {stdlib, "1.16.1"},
 	        {log_roller_server, "0.2"}
 	    ]
 	},

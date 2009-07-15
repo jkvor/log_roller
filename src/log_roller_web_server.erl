@@ -30,8 +30,7 @@
 
 start_link(Args) when is_list(Args) ->
 	Args1 = set_app_values([address, port, doc_root], Args),
-	Result = web_server:start(?MODULE, Args1),
-	io:format("res j~p~n", [Result]), Result.
+	web_server:start(?MODULE, Args1).
 
 %%====================================================================
 %% web_server callbacks
@@ -92,8 +91,20 @@ load_server(Req, Opts0, ServerName) ->
 				error_logger:error_report({?MODULE, display, Err}),
 	            lists:flatten(io_lib:format("~p~n", [Err]))
 		end,
-	Req:respond({200, [{"Content-Type", "text/html"}], Result}),
-	noreply.
+	Response = Req:ok({"text/html", [{"Content-Type", "text/html"}], chunked}),
+	Response:write_chunk("Mochiconntest welcomes you! Your Id: 1\n"),
+	feed(Response, "1", 1).
+
+feed(Response, Path, N) when N == 10 ->
+	Msg = io_lib:format("Chunk ~w for id ~s\n", [N, Path]),
+    Response:write_chunk(Msg),
+	Response;
+
+feed(Response, Path, N) ->
+    timer:sleep(1000),
+    Msg = io_lib:format("Chunk ~w for id ~s\n", [N, Path]),
+    Response:write_chunk(Msg),
+    feed(Response, Path, N+1).
 
 %% internal functions
 set_app_values([], Args) -> Args;

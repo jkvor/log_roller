@@ -39,3 +39,14 @@
 -define(Bin_Term_Stop, <<16#EE, 16#EE, 16#EE, 16#EE>>).
 
 -define(Server_Name, fun(N) -> list_to_atom(lists:flatten(io_lib:format("log_roller_disk_logger_~p", [N]))) end).
+
+-record(cprops, {disk_logger_name, file_stub, chunk_size, size_limit, max_index, use_cache}).
+-record(cstate, {index, position, last_timestamp, binary_remainder, cache, num_items}).
+-record(continuation, {properties, state}).
+-record(cache_entry, {cstate, terms}).
+
+-define(GET_CPROP(Continuation, Field), (Continuation#continuation.properties)#cprops.Field).
+-define(GET_CSTATE(Continuation, Field), (Continuation#continuation.state)#cstate.Field).
+-define(SET_CPROP(Continuation, Field, Value), Continuation#continuation{properties=(Continuation#continuation.properties)#cprops{Field=Value}}).
+-define(SET_CSTATE(Continuation, Field, Value), Continuation#continuation{state=(Continuation#continuation.state)#cstate{Field=Value}}).
+

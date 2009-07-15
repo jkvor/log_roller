@@ -6,7 +6,7 @@
 %% * Test a wrapping and overwriting log
 %% =============================================================================
 main(_) ->
-    etap:plan(12),
+    etap:plan(unknown),
 
 	log_roller_test:load_apps(),
 	put(log_dir, log_roller_test:rnd_dir()),

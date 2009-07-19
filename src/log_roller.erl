@@ -68,7 +68,7 @@ start_phase(discovery, _, _) ->
 register_subscriber(Node) when is_atom(Node) ->
 	case catch rpc:call(Node, log_roller_disk_logger, ping, [node()]) of
 		List when is_list(List) ->
-			error_logger:info_msg("ping successful for ~p: ~p~n", [Node, List]),
+			io:format("ping successful for ~p: ~p~n", [Node, List]),
 			[begin
 				gen_event:call(error_logger, log_roller_h, {subscribe, Pid})
 			 end || {ok, Pid} <- List];
@@ -77,6 +77,6 @@ register_subscriber(Node) when is_atom(Node) ->
 		{error, application_not_running} ->
 			ok;
 		Err ->
-			error_logger:info_msg("failed to register ~p: ~p~n", [Node, Err]),
+			io:format("failed to register ~p: ~p~n", [Node, Err]),
 			ok
 	end.

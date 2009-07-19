@@ -23,7 +23,7 @@
 -module(log_roller_web_server).
 -behaviour(web_server).
 
--export([start_link/1, load_server/3]).
+-export([start_link/1, load_server/2]).
 
 %% web_server callbacks
 -export([dispatch/2]).
@@ -43,26 +43,25 @@ start_link(Args) when is_list(Args) ->
 %%			 Req = mochiweb_request()
 %%			 PathTokens = list()
 %%--------------------------------------------------------------------	
-dispatch(Req, ['GET', "server"]) ->
+dispatch(_Req, ['GET', "server"]) ->
 	ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
+	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
 	
 dispatch(Req, [_, "server", ServerName]) ->
-	{reply, ?MODULE, load_server, [Req, Req:parse_post(), ServerName]};
-
-dispatch(Req, ['GET']) ->
-    ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
+	{reply, ?MODULE, load_server, [Req:parse_post(), ServerName]};
 	
 dispatch(Req, ['GET', "log_roller", "log_roller_webtool", "index"]) ->
     ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
+	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
+	
+dispatch(Req, [_, "code_injector"]) ->
+	{reply, ?MODULE, inject_code, [Req:parse_post()]};
 	
 dispatch(_, _) ->
 	undefined.
 	
-load_server(Req, Opts0, ServerName) ->
-    error_logger:info_msg("load_server: ~p~n", [Opts0]),
+load_server(Opts0, ServerName) ->
+    io:format("load_server: ~p~n", [Opts0]),
 	Opts = dict:to_list(lists:foldl(
 		fun ({_, []}, Dict) ->
 				Dict;
@@ -79,7 +78,7 @@ load_server(Req, Opts0, ServerName) ->
 	Result =
 		case (catch lrb:fetch(list_to_atom(ServerName), Opts)) of
 			List when is_list(List) ->
-				%error_logger:info_msg("fetch success: ~p~n", [List]),
+				%io:format("fetch success: ~p~n", [List]),
 				Header = lr_header:render({data, ServerName, lrb:disk_logger_names(),
 							proplists:get_value("max", Opts0, ""), 
 							proplists:get_value("type", Opts0, "all"), 
@@ -91,9 +90,10 @@ load_server(Req, Opts0, ServerName) ->
 				error_logger:error_report({?MODULE, display, Err}),
 	            lists:flatten(io_lib:format("~p~n", [Err]))
 		end,
-	Response = Req:ok({"text/html", [{"Content-Type", "text/html"}], chunked}),
-	Response:write_chunk("Mochiconntest welcomes you! Your Id: 1\n"),
-	feed(Response, "1", 1).
+	ok.
+%	Response = Req:ok({"text/html", [{"Content-Type", "text/html"}], chunked}),
+%	Response:write_chunk("Mochiconntest welcomes you! Your Id: 1\n"),
+%	feed(Response, "1", 1).
 
 feed(Response, Path, N) when N == 10 ->
 	Msg = io_lib:format("Chunk ~w for id ~s\n", [N, Path]),

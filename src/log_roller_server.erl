@@ -59,7 +59,7 @@ total_writes() ->
 
 %% @hidden
 init(_) ->
-	DiskLoggers = get_disk_loggers_from_config(),
+	DiskLoggers = log_roller_config:get_disk_loggers(),
 	DiskLoggerChildren =
 		[begin
 			{?Server_Name(DiskLogger#disk_logger.name), {log_roller_disk_logger, start_link, [DiskLogger]}, permanent, 5000, worker, [log_roller_disk_logger]}
@@ -71,59 +71,6 @@ init(_) ->
 		[Lrc] ++ lists:reverse([Lrb, Lrws | DiskLoggerChildren])
 	}}.
 	
-%% {disk_logger, Name::atom(), Nodes::[node()], Filters::[{atom(), any()}], LogDir::string(), MaxBytes::integer(), MaxFiles::integer()}
-get_disk_loggers_from_config() ->
-	case delete_non_disk_loggers(application:get_all_env(log_roller_server)) of
-		[] ->
-			[#disk_logger{}];
-		Envs ->
-			get_disk_loggers_from_config(Envs, [])
-	end.
-	
-delete_non_disk_loggers(Envs) ->
-    lists:foldl(
-        fun(Key, Acc) ->
-            proplists:delete(Key, Acc)
-        end, Envs, [included_applications, address, port, doc_root]).
-        
-get_disk_loggers_from_config([], Loggers) -> Loggers;
-	
-get_disk_loggers_from_config([{Key,Val}|Tail], Loggers) 
-when Key==log_dir; Key==filters; Key==cache_size; Key==maxbytes; Key==maxfiles ->
-    {Logger, Loggers1} = get_default_logger(Loggers),
-    Loggers2 = [populate_disk_logger_field(Key, Val, Logger)|Loggers1],
-    get_disk_loggers_from_config(Tail, Loggers2);
-	
-get_disk_loggers_from_config([{Custom, Args}|Tail], Loggers) when is_atom(Custom), is_list(Args) ->	
-	Logger = populate_disk_logger_fields(#disk_logger{name=Custom}, [filters, log_dir, cache_size, maxbytes, maxfiles], Args),
-	get_disk_loggers_from_config(Tail, [Logger|Loggers]).
-
-get_default_logger(Loggers) ->
-	case lists:keytake(default, 2, Loggers) of
-		{value, Default, Loggers1} ->
-			{Default, Loggers1};
-		false ->
-			{#disk_logger{}, Loggers}
-	end.
-	
-populate_disk_logger_fields(Logger, [], _) -> Logger;
-
-populate_disk_logger_fields(Logger, [Field|Tail], Args) ->
-	case proplists:get_value(Field, Args) of
-		undefined ->
-			populate_disk_logger_fields(Logger, Tail, Args);
-		Value ->
-			Logger1 = populate_disk_logger_field(Field, Value, Logger),
-			populate_disk_logger_fields(Logger1, Tail, Args)
-	end.
-	
-populate_disk_logger_field(Key, Val, Logger) when is_atom(Key), is_record(Logger, disk_logger) ->
-    Fields = record_info(fields, disk_logger),
-	Indexes = [I+1 || I <- lists:seq(1, length(Fields))],
-	Ref = lists:zip(Fields, Indexes),
-    Index = proplists:get_value(Key, Ref),
-	erlang:setelement(Index, Logger, Val).
-
 %% @hidden
 start_phase(pg2, _, _) ->
     pg2:which_groups(),
@@ -141,7 +88,7 @@ start_phase(discovery, _, _) ->
 	ok.
 
 determine_subscriptions() ->
-    determine_subscriptions(get_disk_loggers_from_config(), [node()|nodes()], []).
+    determine_subscriptions(log_roller_config:get_disk_loggers(), [node()|nodes()], []).
     
 %% [{disk_logger(), [node()]}]
 determine_subscriptions([], _, Acc) -> Acc;

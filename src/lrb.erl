@@ -31,7 +31,7 @@
 -export([start_link/1, start/2, server_loop/1]).
 
 -export([
-	fetch/2
+	fetch/2, disk_loggers/0, raw/1
 ]).
 
 -include("log_roller.hrl").
@@ -54,8 +54,15 @@ start_link(DiskLoggers) ->
 %%				 {grep, string()}]
 %%		 Result = list(list(Time::string(), Type::atom(), Node::atom(), Message::any()))
 %% @doc fetch a list of log entries for a specific disk_logger
-fetch(Fetch, Opts) -> call({fetch, Fetch, Opts}).
+fetch(Continuation, Opts) when is_record(Continuation, continuation) -> 
+	call({fetch, Continuation, Opts});
+
+fetch(DiskLogger, Opts) when is_atom(DiskLogger) -> 
+	call({fetch, DiskLogger, Opts}).
 	
+raw(DiskLogger) ->
+	log_roller_disk_logger:raw(DiskLogger).
+
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
@@ -71,7 +78,7 @@ server_loop(State) ->
     end,
     server_loop(State).
 
-state() ->
+disk_loggers() ->
 	global:send(log_roller_browser_state, {self(), state}),
 	receive
 		{ok, State} -> State
@@ -79,7 +86,7 @@ state() ->
 	
 call(Term) ->
 	Self = self(),
-	State = state(),
+	State = disk_loggers(),
 	Pid = spawn_link(fun() -> handle_call(Term, Self, State) end),
 	receive
 		{Pid, Result} -> Result

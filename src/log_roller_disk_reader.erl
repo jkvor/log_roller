@@ -41,7 +41,7 @@ start_continuation(LoggerName, Cache, UseCache) ->
 	ChunkSize = Pos-StartPos,
 	Props = {cprops, LoggerName, FileStub, ChunkSize, SizeLimit, MaxIndex, UseCache},
 	State = {cstate, Index, StartPos, {9999,0,0}, <<>>, Cache, 0},
-	{ok, {continuation, Props, State}}.
+	{continuation, Props, State}.
 
 %% @spec invalidate_cache(atom(), {cherly, port()}, Index) -> ok
 %% @doc remove all cache entries that point to the file ending in Index

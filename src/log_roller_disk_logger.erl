@@ -30,7 +30,7 @@
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([sync/1, register_as_subscriber_with/2, ping/1, total_writes/1, current_location/1, options/1]).
+-export([sync/1, register_as_subscriber_with/2, ping/1, total_writes/1, current_location/1, options/1, raw/1, log/1]).
 
 -include("log_roller.hrl").
 
@@ -115,6 +115,12 @@ current_location(LoggerName) when is_atom(LoggerName) ->
 options(LoggerName) when is_atom(LoggerName) ->
 	gen_server:call(?Server_Name(LoggerName), options).
 
+raw(LoggerName) when is_atom(LoggerName) ->
+	gen_server:call(?Server_Name(LoggerName), raw).
+	
+log(LoggerName) when is_atom(LoggerName) ->
+	gen_server:call(?Server_Name(LoggerName), log).
+	
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -166,8 +172,37 @@ handle_call(current_location, _From, #state{log=Log, args=Args}=State) ->
 handle_call(options, _From, #state{args=Args}=State) ->
 	{reply, Args, State};
 		
+handle_call(log, _From, #state{log=Log}=State) ->
+	{reply, Log, State};
+	
+handle_call(raw, _From, #state{log=Log}=State) ->
+	Info = disk_log:info(Log),
+	Result = case proplists:get_value(type, Info) of
+		halt -> undefined;
+		wrap ->
+			File = proplists:get_value(file, Info),
+			lists:flatten([begin
+				Filename = lists:flatten(lists:concat([File, ".", ItemNum])),
+				case file:read_file(Filename) of
+					{ok, Binary} -> decode_raw(Binary, []);
+					{error, Reason} -> []
+				end
+			 end || ItemNum <- lists:seq(1, proplists:get_value(no_current_items, Info, 0))])
+	end,
+	{reply, Result, State};
+	
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
-
+	
+decode_raw(<<>>, Acc) -> Acc;
+decode_raw(Bin, Acc) ->
+	case Bin of
+		<<16#FF:8, 16#FF:8, 16#FF:8, 16#FF:8, LogSize:16/integer, Rest/binary>> ->
+			<<BinLog:LogSize/binary, 16#EE:8, 16#EE:8, 16#EE:8, 16#EE:8, Tail/binary>> = Rest,
+			decode_raw(Tail, [binary_to_term(BinLog)|Acc]);
+		_ ->
+			decode_raw(<<>>, Acc)
+	end.
+	
 %%--------------------------------------------------------------------
 %% Function: handle_cast(Msg, State) -> {noreply, State} |
 %%                                      {noreply, State, Timeout} |
@@ -201,7 +236,7 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, to
 handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=Log, disk_logger_name=Name}=State) ->
 	Infos = disk_log:info(Log),
 	Index = proplists:get_value(current_file, Infos),
-	spawn(fun() -> lrb:set_current_file(Name, Index) end),
+	%spawn(fun() -> lrb:set_current_file(Name, Index) end),
 	{noreply, State};
 	
 handle_info(_Info, State) -> io:format("info: ~p~n", [_Info]), {noreply, State}.

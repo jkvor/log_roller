@@ -29,7 +29,7 @@
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([add/1, get/2, put/3, delete/2]).
+-export([add/1, get/2, put/3, delete/2, size/1, items/1]).
 
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -52,6 +52,12 @@ put(_, _, _) ->
 %% @spec delete(string()) -> ok
 delete(CacheStr, Key) when is_list(CacheStr), is_list(Key) ->
 	gen_server:call(?MODULE, {delete, CacheStr, Key}).
+	
+size(CacheStr) when is_list(CacheStr) ->
+	gen_server:call(?MODULE, {size, CacheStr}).
+	
+items(CacheStr) when is_list(CacheStr) ->
+	gen_server:call(?MODULE, {items, CacheStr}).
 	
 %%====================================================================
 %% gen_server callbacks
@@ -93,8 +99,16 @@ handle_call({put, CacheStr, Key, Val}, _From, State) ->
 
 handle_call({delete, CacheStr, Key}, _From, State) ->
 	Cache = proplists:get_value(CacheStr, State),
-	{reply, delete_internal(Cache, Key), State}.
+	{reply, delete_internal(Cache, Key), State};
+	
+handle_call({size, CacheStr}, _From, State) ->
+	Cache = proplists:get_value(CacheStr, State),
+	{reply, cherly:size(Cache), State};
 
+handle_call({items, CacheStr}, _From, State) ->
+	Cache = proplists:get_value(CacheStr, State),
+	{reply, cherly:items(Cache), State}.
+	
 %%--------------------------------------------------------------------
 %% Function: handle_cast(Msg, State) -> {noreply, State} |
 %%                                      {noreply, State, Timeout} |

@@ -50,31 +50,27 @@ dispatch(_Req, ['GET', "server"]) ->
 dispatch(Req, [_, "server", ServerName]) ->
 	{reply, ?MODULE, load_server, [Req:parse_post(), ServerName]};
 	
-dispatch(Req, ['GET', "log_roller", "log_roller_webtool", "index"]) ->
-    ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [[], atom_to_list(ServerName)]};
-	
-dispatch(Req, [_, "code_injector"]) ->
-	{reply, ?MODULE, inject_code, [Req:parse_post()]};
-	
 dispatch(_, _) ->
 	undefined.
 	
+opts([], Dict) -> 
+	Dict;
+opts([{_, []}|Tail], Dict) ->
+	opts(Tail, Dict);
+opts([{Key,Val}|Tail], Dict) ->
+	Key1 = dict_key(Key),
+	Val1 = dict_val(Key1, Val),
+	case dict:is_key(Key1, Dict) of
+		true ->
+			opts(Tail, dict:append_list(Key1, Val1, Dict));
+		false ->
+			opts(Tail, dict:store(Key1, Val1, Dict))
+	end.
+	
+	
 load_server(Opts0, ServerName) ->
     io:format("load_server: ~p~n", [Opts0]),
-	Opts = dict:to_list(lists:foldl(
-		fun ({_, []}, Dict) ->
-				Dict;
-			({Key,Val}, Dict) ->
-				Key1 = dict_key(Key),
-				Val1 = dict_val(Key1, Val),
-				case dict:is_key(Key1, Dict) of
-					true ->
-						dict:append_list(Key1, Val1, Dict);
-					false ->
-						dict:store(Key1, Val1, Dict)
-				end
-		end, dict:new(), Opts0)),
+	Opts = opts(Opts0),
 	Result =
 		case (catch lrb:fetch(list_to_atom(ServerName), Opts)) of
 			List when is_list(List) ->

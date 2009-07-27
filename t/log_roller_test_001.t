@@ -18,6 +18,7 @@ main(_) ->
 		[begin
 			etap:is(binary_to_list(log_roller_cache:get(Cache, integer_to_list(I))), Text ++ integer_to_list(I), "cache value matches")
 		 end || I <- lists:seq(1, Num)],
+		etap:is(log_roller_cache:items(Cache), 100, "num cache items match ok"),
 		ok
 	end, "correct values returned from cache"),
 	
@@ -26,6 +27,7 @@ main(_) ->
 		[log_roller_cache:put(Cache, integer_to_list(I), <<I:8/integer>>) || I <- lists:seq(1, 25)],
 		etap:is(log_roller_cache:get(Cache, "1"), undefined, "first value overwritten"),
 		[etap:is(log_roller_cache:get(Cache, integer_to_list(I)), <<I:8/integer>>, "cache value matches") || I <- lists:seq(2, 25)],
+		etap:is(log_roller_cache:items(Cache), 24, "num cache items match ok"),
 		ok
 	end, "correct values returned from cache"),
 	

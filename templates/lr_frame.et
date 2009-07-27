@@ -2,6 +2,11 @@
 <html>
 <head>
 	<title>Log Roller</title>
+	<script type="javascript">
+		function toggle_tail() {
+			
+		}
+	</script>
 	<style type="text/css">
 		body {
 			color: #666666;

@@ -2,12 +2,10 @@ VERSION=0.2
 LIBDIR=`erl -eval 'io:format("~s~n", [code:lib_dir()])' -s init stop -noshell`
 ROOTDIR=`erl -eval 'io:format("~s~n", [code:root_dir()])' -s init stop -noshell`
 
-ERL_SOURCES := $(wildcard src/*.erl)
-ERL_OBJECTS := $(ERL_SOURCES:%.erl=./%.beam)
-
 all: rel
 
-compile: $(ERL_OBJECTS)
+compile:
+	(cd src;$(MAKE))
 
 templates: compile
 	erl -pa ebin -eval 'log_roller_server:compile_templates()' -s init stop -noshell
@@ -38,7 +36,3 @@ package: clean
 	
 test:
 	prove t/*.t
-
-./%.beam: %.erl
-	@mkdir -p ebin
-	erlc +debug_info -I include -o ebin $<

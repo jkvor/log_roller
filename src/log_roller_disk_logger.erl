@@ -30,7 +30,7 @@
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([sync/1, register_as_subscriber_with/2, ping/1, total_writes/1, current_location/1, options/1, raw/1, log/1]).
+-export([sync/1, register_as_subscriber_with/2, ping/1, total_writes/1, current_location/1, options/1, log/1]).
 
 -include("log_roller.hrl").
 
@@ -115,9 +115,6 @@ current_location(LoggerName) when is_atom(LoggerName) ->
 options(LoggerName) when is_atom(LoggerName) ->
 	gen_server:call(?Server_Name(LoggerName), options).
 
-raw(LoggerName) when is_atom(LoggerName) ->
-	gen_server:call(?Server_Name(LoggerName), raw).
-	
 log(LoggerName) when is_atom(LoggerName) ->
 	gen_server:call(?Server_Name(LoggerName), log).
 	
@@ -174,9 +171,6 @@ handle_call(options, _From, #state{args=Args}=State) ->
 		
 handle_call(log, _From, #state{log=Log}=State) ->
 	{reply, Log, State};
-	
-handle_call(raw, _From, #state{log=Log}=State) ->
-	{reply, log_roller_raw:read(Log), State};
 	
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 	

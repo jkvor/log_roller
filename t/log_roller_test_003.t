@@ -11,6 +11,7 @@ main(_) ->
 	log_roller_test:load_apps(),
 	put(log_dir, log_roller_test:rnd_dir()),
 	application:set_env(log_roller_server, log_dir, get(log_dir)),
+	application:set_env(log_roller_server, cache_size, 9000000),
 	application:set_env(log_roller_server, maxbytes, 9000000),
 	application:set_env(log_roller_server, maxfiles, 10),
 	log_roller_test:start_apps(),
@@ -26,15 +27,23 @@ main(_) ->
 	log_roller_test:wait_for_queue_to_empty(),
 	ok = log_roller_disk_logger:sync(default),
 
-	etap:is(length(log_roller_raw:read(default)), 1002, "raw ok"),
+	%etap:is(length(log_roller_raw:read(default)), 1002, "raw ok"),
 	
-	io:format("fetching: ~p~n", [lrb:fetch(default, [])]),
- 	
+	%etap:is(length(fetch(default, [{cache, false}], [])), 1002, "fetch ok"),
+	
+	etap:is(length(fetch(default, [{cache, true}], [])), 1002, "fetch ok"),
+	
+	{_,_,_,_,_,_,_,Cache} = lrb:disk_logger_by_name(default, lrb:disk_loggers()),
+	CacheSize = log_roller_cache:size(Cache),
+	DiskSize = proplists:get_value(no_current_bytes, disk_log:info(default), 0),
+	Diff = (CacheSize/DiskSize),
+	etap:ok(Diff < 1.01 andalso Diff > 0.99, "cache size matches ok"), 
+	
  	ok = log_roller_test:teardown_test(),
 
 	etap:end_tests().
-% 
-% fetch(undefined, _, Acc) -> Acc;
-% fetch(Continuation, Opts, Acc) ->
-% 	{Cont, Results} = lrb:fetch(Continuation, Opts),
-% 	fetch(Cont, Opts, lists:append(Acc, Results)).
+
+fetch(undefined, _, Acc) -> Acc;
+fetch(Continuation, Opts, Acc) ->
+	{Cont, Results} = lrb:fetch(Continuation, Opts),
+	fetch(Cont, Opts, lists:append(Acc, Results)).

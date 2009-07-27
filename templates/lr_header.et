@@ -30,7 +30,7 @@
 		</tr>
 		<tr>
 			<td></td>
-			<td><input type="submit" value="Reload"/></td>
+			<td><input type="submit" value="Search"/>&nbsp;<input id="btn_tail" type="button" onclick="javascript:toggle_tail();" value="Start Tail"/></td>
 		</tr>
 	</table>
 </form>

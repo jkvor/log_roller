@@ -27,11 +27,12 @@
 %% in the shell.
 -module(lrb).
 -author('jacob.vorreuter@gmail.com').
+-compile(export_all).
 
 -export([start_link/1, start/2, server_loop/1]).
 
 -export([
-	fetch/2, disk_loggers/0, raw/1
+	fetch/2, disk_loggers/0
 ]).
 
 -include("log_roller.hrl").
@@ -46,22 +47,16 @@
 start_link(DiskLoggers) ->
 	proc_lib:start(?MODULE, start, [self(), DiskLoggers]).
 
-%% @spec fetch(LoggerName, Opts) -> {continuation(), Results}
-%%		 LoggerName = atom()
+%% @spec fetch(Continuation, Opts) -> {continuation(), Results}
+%%		 Continuation = atom() | continuation()
 %% 		 Opts = [{max, integer()} |
 %%				 {types, [atom()]} |
 %%				 {nodes, [node()]} |
 %%				 {grep, string()}]
 %%		 Result = list(list(Time::string(), Type::atom(), Node::atom(), Message::any()))
 %% @doc fetch a list of log entries for a specific disk_logger
-fetch(Continuation, Opts) when is_record(Continuation, continuation) -> 
-	call({fetch, Continuation, Opts});
-
-fetch(DiskLogger, Opts) when is_atom(DiskLogger) -> 
-	call({fetch, DiskLogger, Opts}).
-	
-raw(DiskLogger) ->
-	log_roller_disk_logger:raw(DiskLogger).
+fetch(Continuation, Opts) when is_atom(Continuation); is_record(Continuation, continuation) -> 
+	call({fetch, Continuation, Opts}).
 
 %%--------------------------------------------------------------------
 %%% Internal functions
@@ -116,7 +111,8 @@ disk_logger_by_name(Name, Loggers) ->
 
 new_continuation(DiskLogger, Opts) ->
 	UseCache = proplists:get_value(cache, Opts, true),
-	log_roller_disk_reader:start_continuation(DiskLogger#disk_logger.name, DiskLogger#disk_logger.cache, UseCache).
+	Cache = if UseCache == true -> DiskLogger#disk_logger.cache; true -> undefined end,
+	log_roller_disk_reader:start_continuation(DiskLogger#disk_logger.name, Cache, UseCache).
 	
 fetch_by_continuation(Continuation, Acc, Opts) ->
 	case (catch log_roller_disk_reader:terms(Continuation)) of
@@ -127,7 +123,7 @@ fetch_by_continuation(Continuation, Acc, Opts) ->
 		{'EXIT', {error, read_full_cycle}} ->
 			{undefined, Acc};
 		{'EXIT', Error} ->
-			error_logger:error_report({?MODULE, fetch_internal, Error}),
+			error_logger:error_report({?MODULE, ?LINE, Error}),
 			exit(Error)
 	end.
 	

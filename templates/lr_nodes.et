@@ -1,0 +1,4 @@
+<%? {data, Nodes} = Data %>
+<% [nod3(Node) || Node <- Nodes] %>
+<%@ nod3(Node) %>
+<option value="<% atom_to_list(Node) %>"><% atom_to_list(Node) %></option>

@@ -49,6 +49,7 @@ file(Prefix, Num) ->
 		{error, _Reason} -> <<>>
 	end.
 	
+fast_forward(<<>>, Acc) -> {Acc, <<>>};
 fast_forward(<<16#FF:8, 16#FF:8, 16#FF:8, 16#FF:8, _/binary>>=Bin, Acc) -> {Acc, Bin};
 fast_forward(<<A:8/binary, Rest/binary>>, Acc) ->
 	fast_forward(Rest, <<Acc/binary, A/binary>>).

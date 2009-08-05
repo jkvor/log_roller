@@ -6,7 +6,7 @@
 %% * Test a wrapping and overwriting log
 %% =============================================================================
 main(_) ->
-	etap:plan(100 + 25 + 2),
+	etap:plan(unknown),
 	
 	log_roller_cache:start_link(),
 	

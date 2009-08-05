@@ -32,7 +32,7 @@
 -export([start_link/1, start/2, server_loop/1]).
 
 -export([
-	fetch/2, disk_loggers/0
+	fetch/2, disk_loggers/0, disk_logger_names/0
 ]).
 
 -include("log_roller.hrl").
@@ -56,7 +56,17 @@ start_link(DiskLoggers) ->
 %%		 Result = list(list(Time::string(), Type::atom(), Node::atom(), Message::any()))
 %% @doc fetch a list of log entries for a specific disk_logger
 fetch(Continuation, Opts) when is_atom(Continuation); is_record(Continuation, continuation) -> 
-	call({fetch, Continuation, Opts}).
+	Timeout = proplists:get_value(timeout, Opts, ?TIMEOUT),
+	call({fetch, Continuation, Opts}, Timeout).
+
+disk_loggers() ->
+	global:send(log_roller_browser_state, {self(), state}),
+	receive
+		{ok, State} -> State
+	after ?TIMEOUT -> exit({state, timeout}) end.
+
+disk_logger_names() ->
+	[Logger#disk_logger.name || Logger <- disk_loggers()].
 
 %%--------------------------------------------------------------------
 %%% Internal functions
@@ -72,20 +82,14 @@ server_loop(State) ->
         {From, state} -> From ! {ok, State}
     end,
     server_loop(State).
-
-disk_loggers() ->
-	global:send(log_roller_browser_state, {self(), state}),
-	receive
-		{ok, State} -> State
-	after ?TIMEOUT -> exit({state, timeout}) end.
 	
-call(Term) ->
+call(Term, Timeout) ->
 	Self = self(),
 	State = disk_loggers(),
 	Pid = spawn_link(fun() -> handle_call(Term, Self, State) end),
 	receive
 		{Pid, Result} -> Result
-	after ?TIMEOUT -> exit({call, timeout}) end.
+	after Timeout -> exit(Pid, timeout) end.
 
 handle_call(Term, From, State) ->
 	Self = self(),
@@ -127,7 +131,7 @@ fetch_by_continuation(Continuation, Acc, Opts) ->
 			exit(Error)
 	end.
 	
-filter([], _Opts, Acc) -> Acc;
+filter([], _Opts, Acc) -> lists:reverse(Acc);
 filter([LogEntry|Tail], Opts, Acc) ->
 	case log_roller_filter:filter(LogEntry, Opts) of
 		[] ->

@@ -188,6 +188,11 @@ rewind_location(#continuation{properties=Props, state=State}=Cont) ->
 		Pos =:= 0 -> 
 			%% move to previous index file
 			{ok, FileSize, Index1} = rewind_file_index(FileStub, Index, undefined, MaxIndex),
+			if
+				Index1 =:= Index andalso FileSize =< Pos ->
+					exit({error, read_full_cycle});
+				true -> ok
+			end,
 			{Pos1,ChunkSize1} =
 				if
 					FileSize > ?MAX_CHUNK_SIZE ->

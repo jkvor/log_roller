@@ -14,8 +14,13 @@ main(_) ->
 	application:set_env(log_roller_server, cache_size, 9000000),
 	application:set_env(log_roller_server, maxbytes, 9000000),
 	application:set_env(log_roller_server, maxfiles, 10),
-	log_roller_test:start_apps(),
-		
+	
+	application:start(log_roller_server),
+	
+	etap:is(length(fetch(default, [{cache, false}, {timeout, 2000}], [])), 0, "empty log returns 0 terms ok"),
+	
+	application:start(log_roller),
+			
 	error_logger:error_msg("Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy"),
 	Text = "Quisque non metus at justo gravida gravida. Vivamus ullamcorper eros sed dui. In ultrices dui vel leo. Duis nisi massa, vestibulum sed, mattis quis, mollis sit amet, urna. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Integer velit nunc, ultrices vitae, sagittis sit amet, euismod in, leo. Sed bibendum, ipsum at faucibus vulputate, est ipsum mollis odio, quis iaculis justo purus non nisl. Aenean tellus nisl, pellentesque in, consectetur non, vestibulum sit amet, nibh. Donec diam. Quisque eros. Etiam dictum tellus et ante. Donec fermentum lectus non augue. Maecenas justo. Aenean et metus ac nunc pharetra congue. Mauris rhoncus justo vitae tortor. Sed ornare tristique neque. In eu enim auctor sem tincidunt vestibulum. Aliquam erat volutpat. Nulla et diam ac magna porttitor molestie. Vestibulum massa erat, tristique sed, venenatis et, sagittis in, mauris.",
 	[error_logger:info_msg("~s: ~w~n", [Text, I]) || I <- lists:seq(1,1000)],

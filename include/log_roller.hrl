@@ -34,7 +34,8 @@
 	cache
 }).
 
--define(MAX_CHUNK_SIZE, 65536).
+%-define(MAX_CHUNK_SIZE, 65536).
+-define(MAX_CHUNK_SIZE, 8192).
 -define(DEFAULT_TIMESTAMP, {9999,0,0}).
 -define(Bin_Term_Start, <<16#FF, 16#FF, 16#FF, 16#FF>>).
 -define(Bin_Term_Stop, <<16#EE, 16#EE, 16#EE, 16#EE>>).

@@ -1,7 +1,5 @@
 <%? {data, List} = Data %>
-<div id="log_frame">
 <% [print_log(Entry) || Entry <- List] %>
-</div>
 
 <%@ print_log([Time, Type, Node, Msg]) when is_list(Time), is_atom(Type), is_atom(Node) %>
 <pre class="logs" onmouseover="javascript:this.className='<% atom_to_list(Type) %>';" onmouseout="javascript:this.className='logs';">

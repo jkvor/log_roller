@@ -201,9 +201,9 @@ build_rel() ->
 	end || {D, P} <- Patterns],
 	RelInfo = {release,
 	    {"log_roller_server", "0.2"},
-	    {erts, Erts}, [
-	        {kernel, Kerne},
-	        {stdlib, Stdl},
+	    {erts, "5.7.2"}, [
+	        {kernel, "2.13.2"},
+	        {stdlib, "1.16.2"},
 	        {log_roller_server, "0.2"}
 	    ]
 	},

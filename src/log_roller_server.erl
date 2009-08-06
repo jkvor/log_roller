@@ -138,9 +138,9 @@ build_rel() ->
 	{ok, FD} = file:open("bin/log_roller_server.rel", [write]),
 	RelInfo = {release,
 	    {"log_roller_server", "0.2"},
-	    {erts, "5.7.1"}, [
-	        {kernel, "2.13.1"},
-	        {stdlib, "1.16.1"},
+	    {erts, "5.7.2"}, [
+	        {kernel, "2.13.2"},
+	        {stdlib, "1.16.2"},
 	        {log_roller_server, "0.2"}
 	    ]
 	},

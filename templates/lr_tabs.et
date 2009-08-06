@@ -6,6 +6,6 @@
 <br/>
 <% [tabs(ServerName, atom_to_list(ServerName1)) || ServerName1 <- ServerNames] %>
 <%@ tabs(ServerName, ServerName) %>
-<div class="active_tab"><a class="tab_link"><% ServerName %></a></div>
+<div class="active_tab" name="tab"><a class="tab_link"><% ServerName %></a></div>
 <%@ tabs(_, ServerName) %>
-<div class="tab"><a class="tab_link" href="javascript:switch_server('<% ServerName %>');"><% ServerName %></a></div>
+<div class="tab" name="tab"><a class="tab_link" href="javascript:switch_server('<% ServerName %>');"><% ServerName %></a></div>

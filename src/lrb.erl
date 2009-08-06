@@ -49,8 +49,7 @@ start_link(DiskLoggers) ->
 
 %% @spec fetch(Continuation, Opts) -> {continuation(), Results}
 %%		 Continuation = atom() | continuation()
-%% 		 Opts = [{max, integer()} |
-%%				 {types, [atom()]} |
+%% 		 Opts = [{types, [atom()]} |
 %%				 {nodes, [node()]} |
 %%				 {grep, string()}]
 %%		 Result = list(list(Time::string(), Type::atom(), Node::atom(), Message::any()))

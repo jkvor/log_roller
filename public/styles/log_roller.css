@@ -25,6 +25,7 @@ div#filter_bar_closed {
 	margin-bottom: 10px;
 	padding-bottom: 5px;
 	padding-left: 10px;
+	display: none;
 }
 
 div#filter_bar_open {
@@ -32,7 +33,6 @@ div#filter_bar_open {
 	margin-bottom: 10px;
 	padding-bottom: 5px;
 	padding-left: 10px;
-	display: none;
 }
 
 div#filters_open_label {

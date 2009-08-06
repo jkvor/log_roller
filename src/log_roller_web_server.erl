@@ -45,65 +45,89 @@ loop(Req, DocRoot) ->
 			"/" ++ Path = Req:get(path),
 			Req:serve_file(Path, DocRoot);
 		Function ->
-			erlang:apply(?MODULE, Function, [PathTokens, Req])
+			erlang:apply(?MODULE, Function, [PathTokens, Req, DocRoot])
 	end.
 	
 dispatch(Path) ->
 	case Path of
+	    ['GET'] -> main_page;
 		[_, "logs"] -> logs;
 		['GET', "servers" | _] -> servers;
 		['GET', "nodes" | _] -> nodes;
 		_ -> undefined
 	end.
 	
-logs(['GET', "logs"], Req) ->
+main_page(['GET'], Req, DocRoot) ->
+	Req:serve_file("logs.html", DocRoot).
+	
+logs(['GET', "logs"], Req, _DocRoot) ->
 	serve_logs(Req:parse_qs(), Req);
 	
-logs(['POST', "logs"], Req) ->
+logs(['POST', "logs"], Req, _DocRoot) ->
 	serve_logs(Req:parse_post(), Req).
 
-servers(['GET', "servers"], Req) ->
+servers(['GET', "servers"], Req, _DocRoot) ->
 	Content = tab_content(atom_to_list(default_server())),
 	Req:respond({200, [?CONTENT_TYPE], Content});
 
-servers(['GET', "servers", ServerName], Req) ->
+servers(['GET', "servers", ServerName], Req, _DocRoot) ->
 	Content = tab_content(ServerName),
 	Req:respond({200, [?CONTENT_TYPE], Content}).
 
-nodes(['GET', "nodes"], Req) ->
+nodes(['GET', "nodes"], Req, _DocRoot) ->
 	NodeOptions = lr_nodes:render({data, get_nodes(default_server())}),
 	Req:respond({200, [?CONTENT_TYPE], NodeOptions});
 
-nodes(['GET', "nodes", Server], Req) ->
+nodes(['GET', "nodes", Server], Req, _DocRoot) ->
 	NodeOptions = lr_nodes:render({data, get_nodes(list_to_atom(Server))}),
 	Req:respond({200, [?CONTENT_TYPE], NodeOptions}).
 		
 serve_logs(Params, Req) ->
 	io:format("params: ~p~n", [Params]),
 	Dict = opts(Params, dict:new()),
-	io:format("dict: ~p~n", [dict:to_list(Dict)]),
+	Max = 
+	    case dict:find(max, Dict) of
+			{ok, Value1} -> Value1;
+			error -> infinity
+		end,
 	ServerName =
 		case dict:find(server, Dict) of
-			{ok, Value} -> Value;
+			{ok, Value2} -> Value2;
 			error -> default_server()
 		end,
-	io:format("server: ~p~n", [ServerName]),
 	Response = Req:respond({200, [{"Transfer-Encoding", "chunked"}, {"Content-Type", "text/html"}], chunked}),
-	fetch_logs(Response, ServerName, dict:to_list(Dict)),
+	fetch_logs(Response, ServerName, dict:to_list(Dict), Max),
 	Response:write_chunk("").
 		
-fetch_logs(_, undefined, _) -> ok;
-fetch_logs(Resp, Cont, Opts) ->
-	io:format("fetch(~p,~p)~n", [Cont, Opts]),
+fetch_logs(Resp, Cont, Opts, Max) ->
 	case (catch lrb:fetch(Cont, Opts)) of
 		{'EXIT', Error} ->
 			error_logger:error_report({?MODULE, ?LINE, Error}),
 			ok;
 		{Cont1, Logs} ->
-			Content = lr_logs:render({data, Logs}),
-			Resp:write_chunk(Content),
-			timer:sleep(500),
-			fetch_logs(Resp, Cont1, Opts)
+			if
+			    is_record(Cont1, continuation) ->
+			        case ?GET_CSTATE(Cont1, num_items) of
+        			    NumItems when is_integer(NumItems), NumItems < Max ->
+        			        Content = lr_logs:render({data, Logs}),
+        			        Resp:write_chunk(Content),
+        			        fetch_logs(Resp, Cont1, Opts, Max);
+        			    NumItems when is_integer(NumItems), NumItems >= Max ->
+        			        Logs2 = 
+            			        case ?GET_CSTATE(Cont, num_items) of
+            			            PrevNumItems when is_integer(PrevNumItems) ->
+            			                {Logs1, _} = lists:split(Max - PrevNumItems, Logs),
+            			                Logs1;
+            			            _ ->
+            			                Logs
+            			        end,
+    			            Content = lr_logs:render({data, Logs2}),
+        			        Resp:write_chunk(Content)
+        			end;
+        		true ->
+        		    Content = lr_logs:render({data, Logs}),
+			        Resp:write_chunk(Content)
+        	end
 	end.
 
 default_server() ->

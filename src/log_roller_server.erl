@@ -66,9 +66,10 @@ init(_) ->
 		 end || DiskLogger <- DiskLoggers],
 	Lrb = {lrb, {lrb, start_link, [DiskLoggers]}, permanent, 5000, worker, [lrb]}, 
 	Lrws = {log_roller_web_server, {log_roller_web_server, start_link, [[]]}, permanent, 5000, worker, [log_roller_web_server]},
+	Lrt = {log_roller_tail, {log_roller_tail, start_link, []}, permanent, 5000, worker, [log_roller_tail]},
 	Lrc = {log_roller_cache, {log_roller_cache, start_link, []}, permanent, 5000, worker, [log_roller_cache]},
 	{ok, {{one_for_one, 10, 10}, 
-		[Lrc] ++ lists:reverse([Lrb, Lrws | DiskLoggerChildren])
+		[Lrc] ++ lists:reverse(DiskLoggerChildren) ++ [Lrws, Lrb, Lrt]
 	}}.
 	
 %% @hidden

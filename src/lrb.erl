@@ -136,10 +136,6 @@ filter([LogEntry|Tail], Opts, Acc) ->
 		[] ->
 			filter(Tail, Opts, Acc);
 		[_] ->
-			Term = [format_time(LogEntry#log_entry.time), LogEntry#log_entry.type, LogEntry#log_entry.node, LogEntry#log_entry.message],
+			Term = log_roller_utils:format_log_entry(LogEntry),
 			filter(Tail, Opts, [Term|Acc])
 	end.
-	
-format_time({Mega,Secs,Micro}) ->
-	{{Y,Mo,D},{H,Mi,S}} = calendar:now_to_local_time({Mega,Secs,Micro}),
-	lists:flatten(io_lib:format("~w-~2.2.0w-~2.2.0w ~2.2.0w:~2.2.0w:~2.2.0w:~w", [Y,Mo,D,H,Mi,S,Micro])).	

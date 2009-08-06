@@ -40,47 +40,58 @@ start_link(Args) when is_list(Args) ->
 
 loop(Req, DocRoot) ->
 	PathTokens = [Req:get(method)|string:tokens(Req:get(path), "/")],
-	case dispatch(PathTokens) of
-		undefined ->
+	case handle(PathTokens, Req, DocRoot) of
+		no_match ->
 			"/" ++ Path = Req:get(path),
 			Req:serve_file(Path, DocRoot);
-		Function ->
-			erlang:apply(?MODULE, Function, [PathTokens, Req, DocRoot])
+		Response ->
+			Response
 	end.
+		
+handle(['GET', "tail"], Req, _DocRoot) ->
+    tail_logs(Req:parse_qs(), Req);
+    
+handle(['POST', "tail"], Req, _DocRoot) ->
+    tail_logs(Req:parse_qs(), Req);
+        
+handle(['GET'], Req, DocRoot) ->
+	Req:serve_file("logs.html", DocRoot);
 	
-dispatch(Path) ->
-	case Path of
-	    ['GET'] -> main_page;
-		[_, "logs"] -> logs;
-		['GET', "servers" | _] -> servers;
-		['GET', "nodes" | _] -> nodes;
-		_ -> undefined
-	end.
-	
-main_page(['GET'], Req, DocRoot) ->
-	Req:serve_file("logs.html", DocRoot).
-	
-logs(['GET', "logs"], Req, _DocRoot) ->
+handle(['GET', "logs"], Req, _DocRoot) ->
 	serve_logs(Req:parse_qs(), Req);
 	
-logs(['POST', "logs"], Req, _DocRoot) ->
-	serve_logs(Req:parse_post(), Req).
+handle(['POST', "logs"], Req, _DocRoot) ->
+	serve_logs(Req:parse_post(), Req);
 
-servers(['GET', "servers"], Req, _DocRoot) ->
+handle(['GET', "servers"], Req, _DocRoot) ->
 	Content = tab_content(atom_to_list(default_server())),
 	Req:respond({200, [?CONTENT_TYPE], Content});
 
-servers(['GET', "servers", ServerName], Req, _DocRoot) ->
+handle(['GET', "servers", ServerName], Req, _DocRoot) ->
 	Content = tab_content(ServerName),
-	Req:respond({200, [?CONTENT_TYPE], Content}).
+	Req:respond({200, [?CONTENT_TYPE], Content});
 
-nodes(['GET', "nodes"], Req, _DocRoot) ->
+handle(['GET', "nodes"], Req, _DocRoot) ->
 	NodeOptions = lr_nodes:render({data, get_nodes(default_server())}),
 	Req:respond({200, [?CONTENT_TYPE], NodeOptions});
 
-nodes(['GET', "nodes", Server], Req, _DocRoot) ->
+handle(['GET', "nodes", Server], Req, _DocRoot) ->
 	NodeOptions = lr_nodes:render({data, get_nodes(list_to_atom(Server))}),
-	Req:respond({200, [?CONTENT_TYPE], NodeOptions}).
+	Req:respond({200, [?CONTENT_TYPE], NodeOptions});
+	
+handle(_, _, _) -> no_match.
+	
+tail_logs(Params, Req) ->
+    Dict = opts(Params, dict:new()),
+    ServerName =
+		case dict:find(server, Dict) of
+			{ok, Value} -> Value;
+			error -> default_server()
+		end,
+    Response = Req:respond({200, [{"Transfer-Encoding", "chunked"}, {"Content-Type", "text/html"}], chunked}),
+    log_roller_tail:add_response(ServerName, dict:to_list(Dict), Response),
+    receive x -> x end,
+    Response:write_chunk("").
 		
 serve_logs(Params, Req) ->
 	io:format("params: ~p~n", [Params]),

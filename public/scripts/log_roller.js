@@ -67,6 +67,34 @@ function refresh() {
 	});
 }
 
+function tail() {
+    $('log_frame').innerHTML = '';
+	
+	new Ajax.Request("/tail", {
+		method: 'post',
+		parameters: {
+			server: $('server').value,
+			type: $('sl_type').value, 
+			node: $('sl_node').value,
+			grep: $('grep').value
+		},
+		onCreate: function(request) {
+			for(var i=0; i<g_requests.length; i++) {
+				try { g_requests[i].transport.abort(); } catch(e) {}
+				$('log_frame').innerHTML = '';
+			}
+			g_requests.push(request);
+			$('ajax-loader').style.display = 'inline';
+		},
+		onInteractive: function(logs) {
+			$('log_frame').innerHTML = logs.responseText;
+		},
+		onComplete: function(logs) {
+			$('ajax-loader').style.display = 'none';
+		}
+	});
+}
+
 function switch_server(server_name) {
 	$('server').value = server_name;
 	$('sl_type').selectedIndex = -1;

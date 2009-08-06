@@ -200,13 +200,15 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, to
 				LogSize = size(BinLog),
 				Bin = <<?Bin_Term_Start/binary, LogSize:16, BinLog:LogSize/binary, ?Bin_Term_Stop/binary>>,
 				disk_log:blog(Log, Bin),
+				io:format("sending ~p to tail~n", [LogEntry]),
+				erlang:send(log_roller_tail, {log, Log, LogEntry}),
 				State#state{total_writes=Writes+1}			
 		end,
 	{noreply, State1};
 
-handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=Log, disk_logger_name=Name}=State) ->
-	Infos = disk_log:info(Log),
-	Index = proplists:get_value(current_file, Infos),
+handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=_Log, disk_logger_name=_Name}=State) ->
+	%Infos = disk_log:info(Log),
+	%Index = proplists:get_value(current_file, Infos),
 	%spawn(fun() -> lrb:set_current_file(Name, Index) end),
 	{noreply, State};
 	

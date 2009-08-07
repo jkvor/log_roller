@@ -1,51 +1,30 @@
 == ABOUT ==
-log_roller is a distributed logging solution for broadcasting
-log messages to designated disk logger nodes in real-time.
+Log_roller is based on a publisher/subscriber model. It integrates
+seamlessly with existing systems without the need to change code.
+Nodes designated as publishers broadcast log messages sent to the
+error_logger to nodes designated as subscribers.  The subscriber
+writes the log message to a rotating disk log similar to the SASL
+error_logger_mf_maxbytes and error_logger_mf_maxfiles functionality.
 
-== GETTING STARTED ==
-* Download the latest stable package <http://jacobvorreuter.github.com/log_roller/log_roller-0.2.tgz>
-* install dependencies found in dependencies directory
-* untar, make, make install
-* start the log_roller application from a node
-	1> application:start(log_roller).
-* start a log_roller server node from the shell
-	$> ./log_roller console server
-* visit http://127.0.0.1:8888
+Publishers and subscribers perform auto-discovery upon booting.
+During startup, nodes of either type (publisher or subscriber)
+will attempt to connect. Make sure to have matching ~/.erlang.cookie 
+files hosted on the servers running log_roller. The nodes will 
+not be able to see each other otherwise.
 
-== DEPENDENCIES ==
-Judy >= 1.0.4: http://judy.sourceforge.net/
-Cherly http://github.com/cliffmoon/cherly
+== Installation ==
+Either clone the repository github.com/JacobVorreuter/log_roller
+or download the tarball from jacobvorreuter.github.com/log_roller
+and run "sudo make install"
 
-== TERMINOLOGY ==
-Publisher node: a node running the log_roller application that
-broadcasts its log messages to a subscriber node.
-
-Subscriber node: a node running the log_roller_server application
-that accepts messages from subscriber nodes.
-
-== HOW IT WORKS ==
-Publisher and subscriber nodes perform an auto-discovery phase
-during their startup. When ping attempts are successful, a
-connection is established between publisher nodes and subscriber nodes.
-Publisher nodes maintain a list of subscribed nodes in their state.
-
-On publisher nodes a custom report_handler module, log_roller_h, 
-publishes messages sent to the error_logger to its registered
-subscriber nodes.  Subscriber nodes can implement filtering to
-only accept messages from certain publisher nodes, or only certain
-types of messages.  The subscriber then writes the log message 
-to a rotating disk log using the disk_log module.
-
-Each server node also hosts a configurable web interface that can
-be used to browse the logs.
-
-== CONFIGURATION ==
-Adding log_roller to the list of applications in your app's .app
-file will start log_roller when your app starts:
+== Integration ==
+To begin logging messages with log_roller, simple start the
+log_roller application. This can be done either in the app file of your
+application:
 
 {application, my_app, [
     {description, "my_app"},
-    {vsn, "0.0.1"},
+    {vsn, "0.3"},
     {modules, []},
     {registered, []},
     {mod, {my_app, []}},
@@ -70,73 +49,29 @@ erl -name server -boot log_roller_server
 
 -or-
 
-./log_roller dev server 	%% start server in console with relative paths
-./log_roller console server %% start server in console
-./log_roller start server   %% start server in detached mode
+{application, my_app, [
+    {description, "my_app"},
+    {vsn, "0.3"},
+    {modules, []},
+    {registered, []},
+    {mod, {my_app, []}},
+    {applications, [kernel, stdlib, log_roller_server]}
+]}.
 
 -or-
 
 ok = application:start(log_roller_server)
 
-*******
-
+== CONFIGURATION ==
 There is a config file, "log_roller.config" located in the priv 
 directory.  This will be installed to the priv directory in the
 log_roller lib directory inside your otp root directory. For
 instance: /usr/lib/erlang/lib/log_roller-0.1/priv/log_roller.config.
-This contains the following configurable values:
-
-cache_size:	size of cache in bytes
-maxbytes: max size of disk log in bytes
-maxfiles: number of files on disk used to distribute log data
-log_dir: directory to create log files in
-filters: a list of filters used to filter accepted messages
-
-contents of simple config file:
-
-[{log_roller_server, [
-	{maxbytes, 10485760},
-	{maxfiles, 10},
-	{cache_size, 1048576}
-]}].
-
-Adding partitioning:
-
-It's possible to log messages into multiple 'buckets' on a
-server node. Create an entry for each bucket in the config
-file and define log properties and filters. Each entry in
-the config will get its own tab in the log browser web interface.
-
-[{log_roller_server, [
-	{satchel, [
-		{cache_size, 10485760},
-		{maxbytes, 10485760},
-		{maxfiles, 10},
-		{filters, [
-			{nodes, ['satchel@fuzzy.net']},
-			{types, [progress, info, warning]}
-		]}
-	]},
-	{bucky, [
-		{cache_size, 10485760},
-		{maxbytes, 10485760},
-		{maxfiles, 10},
-		{filters, [
-			{nodes, ['bucky@fuzzy.net']},
-			{grep, "tuna"}
-		]},
-	]}
-]}].
-
-== TROUBLESHOOTING ==
-Make sure to have matching ~/.erlang.cookie files hosted on the 
-servers running log_roller. The nodes will not be able to see 
-each other otherwise.
-
-== TODO ==
-* add regex matching to node filters ex: ingester@.*
+This contains the path to the log directory as well as max file size
+and number of rotating log files.
 
 == LICENSE ==
+
 Copyright (c) 2009 Jacob Vorreuter <jacob.vorreuter@gmail.com>
 
 Permission is hereby granted, free of charge, to any person
@@ -159,3 +94,10 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
+
+== TODO ==
+* make reading faster - add map/reduce algorithm for chunking and
+  parsing logs
+* filter logs
+* read index file instead of asking disk_log where current head is
+* add code coverage target

@@ -30,7 +30,7 @@
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([sync/1, register_as_subscriber_with/2, ping/1, total_writes/1, current_location/1, options/1]).
+-export([sync/1, register_as_subscriber_with/2, ping/1, total_writes/1, current_location/1, options/1, log/1]).
 
 -include("log_roller.hrl").
 
@@ -43,7 +43,7 @@
 %% @spec start_link() -> {ok,Pid} | ignore | {error,Error}
 %% @doc start the server
 start_link(DiskLogger) when is_record(DiskLogger, disk_logger) ->
-    error_logger:info_msg("start server: ~p~n", [?Server_Name(DiskLogger#disk_logger.name)]),
+    io:format("start server: ~p~n", [?Server_Name(DiskLogger#disk_logger.name)]),
     gen_server:start_link({local, ?Server_Name(DiskLogger#disk_logger.name)}, ?MODULE, DiskLogger, []).
 	
 %% @spec sync(LoggerName) -> ok | {error, Reason}
@@ -57,7 +57,6 @@ sync(LoggerName) when is_atom(LoggerName) ->
 %%		 Node = node()
 %% @doc send a message to the specified node, registering the gen_server process as a subscriber
 register_as_subscriber_with(LoggerName, Node) when is_atom(LoggerName), is_atom(Node) ->
-	error_logger:info_msg("subscribe ~p to ~p~n", [LoggerName, Node]),
 	gen_server:call(?Server_Name(LoggerName), {register_as_subscriber_with, Node}).
 
 %% @spec ping(FromNode) -> [{ok, Pid}]
@@ -114,6 +113,9 @@ current_location(LoggerName) when is_atom(LoggerName) ->
 options(LoggerName) when is_atom(LoggerName) ->
 	gen_server:call(?Server_Name(LoggerName), options).
 
+log(LoggerName) when is_atom(LoggerName) ->
+	gen_server:call(?Server_Name(LoggerName), log).
+	
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -144,7 +146,6 @@ handle_call(sync, _From, #state{log=Log}=State) ->
 	{reply, disk_log:sync(Log), State};
 	
 handle_call({register_as_subscriber_with, Node}, _From, State) ->
-	error_logger:info_msg("sending msg to ~p~n", [Node]),
 	Res = gen_event:call({error_logger, Node}, log_roller_h, {subscribe, self()}),
 	{reply, Res, State};
 
@@ -165,8 +166,11 @@ handle_call(current_location, _From, #state{log=Log, args=Args}=State) ->
 handle_call(options, _From, #state{args=Args}=State) ->
 	{reply, Args, State};
 		
+handle_call(log, _From, #state{log=Log}=State) ->
+	{reply, Log, State};
+	
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
-
+	
 %%--------------------------------------------------------------------
 %% Function: handle_cast(Msg, State) -> {noreply, State} |
 %%                                      {noreply, State, Timeout} |
@@ -193,17 +197,18 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, to
 				LogSize = size(BinLog),
 				Bin = <<?Bin_Term_Start/binary, LogSize:16, BinLog:LogSize/binary, ?Bin_Term_Stop/binary>>,
 				disk_log:blog(Log, Bin),
+				gen_server:abcast(log_roller_tail, {log, Log, LogEntry}),
 				State#state{total_writes=Writes+1}			
 		end,
 	{noreply, State1};
 
-handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=Log, disk_logger_name=Name}=State) ->
-	Infos = disk_log:info(Log),
-	Index = proplists:get_value(current_file, Infos),
-	spawn(fun() -> lrb:set_current_file(Name, Index) end),
+handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=_Log, disk_logger_name=_Name}=State) ->
+	%Infos = disk_log:info(Log),
+	%Index = proplists:get_value(current_file, Infos),
+	%spawn(fun() -> lrb:set_current_file(Name, Index) end),
 	{noreply, State};
 	
-handle_info(_Info, State) -> error_logger:info_msg("info: ~p~n", [_Info]), {noreply, State}.
+handle_info(_Info, State) -> io:format("info: ~p~n", [_Info]), {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% Function: terminate(Reason, State) -> void()
@@ -214,7 +219,7 @@ handle_info(_Info, State) -> error_logger:info_msg("info: ~p~n", [_Info]), {nore
 %% @hidden
 %%--------------------------------------------------------------------
 terminate(_Reason, #state{log=Log}) -> 
-	error_logger:info_msg("closing log~n"),
+	io:format("closing log~n"),
 	disk_log:close(Log).
 
 %%--------------------------------------------------------------------
@@ -260,7 +265,7 @@ log_file(#disk_logger{name=Name, log_dir=Dir}) ->
 						ok -> 
 							Dir ++ "/" ++ atom_to_list(Name);
 						DirErr ->
-							error_logger:info_msg("failed to create directory ~p: ~p~n", [Dir, DirErr]),
+							io:format("failed to create directory ~p: ~p~n", [Dir, DirErr]),
 							atom_to_list(Name)
 					end
 			end
@@ -268,15 +273,15 @@ log_file(#disk_logger{name=Name, log_dir=Dir}) ->
 	
 open_log(Args) ->
 	Res = disk_log:open(Args),
-	error_logger:info_msg("opened log: ~p~n", [Res]),
+	io:format("opened log: ~p~n", [Res]),
 	case Res of
 		{ok, Log} ->
-			error_logger:info_msg("info: ~p~n", [disk_log:info(Log)]),
+			io:format("info: ~p~n", [disk_log:info(Log)]),
 			{ok, Log, Args};
 		{repaired, Log, {recovered, _Rec}, {badbytes, _Bad}} ->
 			{ok, Log, Args};
 		{error,{file_error,_,eacces}} ->
-			error_logger:info_msg("insufficient permission level to open ~s~n", [proplists:get_value(file)]),
+			io:format("insufficient permission level to open ~s~n", [proplists:get_value(file)]),
 			exit(eacces);
 		{error,{size_mismatch,_,NewSize}} ->
 			Args1 = proplists:delete(size, Args),
@@ -285,10 +290,10 @@ open_log(Args) ->
 				ok ->
 					{ok, Log1, [{size, NewSize}|Args2]};
 				Err ->
-					error_logger:info_msg("init error: ~p~n", [Err]),
+					io:format("init error: ~p~n", [Err]),
 					exit(Err)
 			end;
 		Err ->
-			error_logger:info_msg("init error: ~p~n", [Err]),
+			io:format("init error: ~p~n", [Err]),
 			exit(Err)
 	end.

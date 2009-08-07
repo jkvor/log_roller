@@ -21,117 +21,209 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(log_roller_web_server).
--behaviour(web_server).
+-compile(export_all).
+%-export([start_link/1]).
 
--export([start_link/1, load_server/3]).
+-include("log_roller.hrl").
 
-%% web_server callbacks
--export([dispatch/2]).
+-define(DEFAULT_ADDRESS, "127.0.0.1").
+-define(DEFAULT_PORT, 8888).
+-define(CONTENT_TYPE, {"Content-Type", "text/html"}).
 
 start_link(Args) when is_list(Args) ->
-	Args1 = set_app_values([address, port, doc_root], Args),
-	web_server:start(?MODULE, Args1).
+	Address = get_arg_value(address, Args, ?DEFAULT_ADDRESS),
+	Port = get_arg_value(port, Args, ?DEFAULT_PORT),
+	DocRoot = get_arg_value(doc_root, Args),
+	Loop = fun (Req) -> ?MODULE:loop(Req, DocRoot) end,
+	io:format("starting web_server ~p ~p ~p~n", [Address, Port, DocRoot]),
+	mochiweb_http:start([{loop, Loop}, {ip, Address}, {port, Port}]).
 
-%%====================================================================
-%% web_server callbacks
-%%====================================================================
+loop(Req, DocRoot) ->
+	PathTokens = [Req:get(method)|string:tokens(Req:get(path), "/")],
+	case handle(PathTokens, Req, DocRoot) of
+		no_match ->
+			"/" ++ Path = Req:get(path),
+			Req:serve_file(Path, DocRoot);
+		Response ->
+			Response
+	end.
+		
+handle(['GET', "tail"], Req, _DocRoot) ->
+    tail_logs(Req:parse_qs(), Req);
+    
+handle(['POST', "tail"], Req, _DocRoot) ->
+    tail_logs(Req:parse_qs(), Req);
+        
+handle(['GET'], Req, DocRoot) ->
+	Req:serve_file("logs.html", DocRoot);
+	
+handle(['GET', "logs"], Req, _DocRoot) ->
+	serve_logs(Req:parse_qs(), Req);
+	
+handle(['POST', "logs"], Req, _DocRoot) ->
+	serve_logs(Req:parse_post(), Req);
 
-%%--------------------------------------------------------------------
-%% Function: dispatch(Req, PathTokens) -> {reply, Status, Headers, Body} | 
-%%										  {reply, Module, Function, Args} | 
-%%										  undefined
-%%			 Req = mochiweb_request()
-%%			 PathTokens = list()
-%%--------------------------------------------------------------------	
-dispatch(Req, ['GET', "server"]) ->
-	ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
-	
-dispatch(Req, [_, "server", ServerName]) ->
-	{reply, ?MODULE, load_server, [Req, Req:parse_post(), ServerName]};
+handle(['GET', "servers"], Req, _DocRoot) ->
+	Content = tab_content(atom_to_list(default_server())),
+	Req:respond({200, [?CONTENT_TYPE], Content});
 
-dispatch(Req, ['GET']) ->
-    ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
+handle(['GET', "servers", ServerName], Req, _DocRoot) ->
+	Content = tab_content(ServerName),
+	Req:respond({200, [?CONTENT_TYPE], Content});
+
+handle(['GET', "nodes"], Req, _DocRoot) ->
+	NodeOptions = lr_nodes:render({data, get_nodes(default_server())}),
+	Req:respond({200, [?CONTENT_TYPE], NodeOptions});
+
+handle(['GET', "nodes", Server], Req, _DocRoot) ->
+	NodeOptions = lr_nodes:render({data, get_nodes(list_to_atom(Server))}),
+	Req:respond({200, [?CONTENT_TYPE], NodeOptions});
 	
-dispatch(Req, ['GET', "log_roller", "log_roller_webtool", "index"]) ->
-    ServerName = lists:nth(1, lrb:disk_logger_names()),
-	{reply, ?MODULE, load_server, [Req, [], atom_to_list(ServerName)]};
+handle(_, _, _) -> no_match.
 	
-dispatch(_, _) ->
-	undefined.
-	
-load_server(Req, Opts0, ServerName) ->
-    error_logger:info_msg("load_server: ~p~n", [Opts0]),
-	Opts = dict:to_list(lists:foldl(
-		fun ({_, []}, Dict) ->
-				Dict;
-			({Key,Val}, Dict) ->
-				Key1 = dict_key(Key),
-				Val1 = dict_val(Key1, Val),
-				case dict:is_key(Key1, Dict) of
-					true ->
-						dict:append_list(Key1, Val1, Dict);
-					false ->
-						dict:store(Key1, Val1, Dict)
-				end
-		end, dict:new(), Opts0)),
-	Result =
-		case (catch lrb:fetch(list_to_atom(ServerName), Opts)) of
-			List when is_list(List) ->
-				%error_logger:info_msg("fetch success: ~p~n", [List]),
-				Header = lr_header:render({data, ServerName, lrb:disk_logger_names(),
-							proplists:get_value("max", Opts0, ""), 
-							proplists:get_value("type", Opts0, "all"), 
-							proplists:get_value("node", Opts0, ""),
-							proplists:get_value("grep", Opts0, "")}),
-				Content = lr_logs:render({data, List}),
-				lr_frame:render({data, [Header, Content]});
-			{'EXIT', Err} ->
-				error_logger:error_report({?MODULE, display, Err}),
-	            lists:flatten(io_lib:format("~p~n", [Err]))
+tail_logs(Params, Req) ->
+    Dict = opts(Params, dict:new()),
+    ServerName =
+		case dict:find(server, Dict) of
+			{ok, Value} -> Value;
+			error -> default_server()
 		end,
-	Response = Req:ok({"text/html", [{"Content-Type", "text/html"}], chunked}),
-	Response:write_chunk("Mochiconntest welcomes you! Your Id: 1\n"),
-	feed(Response, "1", 1).
+    Response = Req:respond({200, [{"Transfer-Encoding", "chunked"}, {"Content-Type", "text/html"}], chunked}),
+    log_roller_tail:add_response(ServerName, dict:to_list(Dict), Response),
+    receive x -> x end,
+    Response:write_chunk("").
+		
+serve_logs(Params, Req) ->
+	io:format("params: ~p~n", [Params]),
+	Dict = opts(Params, dict:new()),
+	Max = 
+	    case dict:find(max, Dict) of
+			{ok, Value1} -> Value1;
+			error -> infinity
+		end,
+	ServerName =
+		case dict:find(server, Dict) of
+			{ok, Value2} -> Value2;
+			error -> default_server()
+		end,
+	Response = Req:respond({200, [{"Transfer-Encoding", "chunked"}, {"Content-Type", "text/html"}], chunked}),
+	fetch_logs(Response, ServerName, dict:to_list(Dict), Max),
+	Response:write_chunk("").
+		
+fetch_logs(Resp, Cont, Opts, Max) ->
+	case (catch lrb:fetch(Cont, Opts)) of
+		{'EXIT', Error} ->
+			error_logger:error_report({?MODULE, ?LINE, Cont, Error}),
+			ok;
+		{Cont1, Logs} ->
+			if
+			    is_record(Cont1, continuation) ->
+			        case ?GET_CSTATE(Cont1, num_items) of
+        			    NumItems when is_integer(NumItems), NumItems < Max ->
+        			        Content = lr_logs:render({data, Logs}),
+        			        Resp:write_chunk(Content),
+        			        fetch_logs(Resp, Cont1, Opts, Max);
+        			    NumItems when is_integer(NumItems), NumItems >= Max ->
+        			        PrevNumItems = 
+        			            if
+        			                is_record(Cont, continuation) ->
+        			                    ?GET_CSTATE(Cont, num_items);
+        			                true ->
+        			                    0
+        			            end,
+        			        Logs2 = 
+            			        if
+            			            is_integer(PrevNumItems) ->
+            			                {Logs1, _} = lists:split(Max - PrevNumItems, Logs),
+            			                Logs1;
+            			            true ->
+            			                Logs
+            			        end,
+    			            Content = lr_logs:render({data, Logs2}),
+        			        Resp:write_chunk(Content)
+        			end;
+        		true ->
+        		    Content = lr_logs:render({data, Logs}),
+			        Resp:write_chunk(Content)
+        	end
+	end.
 
-feed(Response, Path, N) when N == 10 ->
-	Msg = io_lib:format("Chunk ~w for id ~s\n", [N, Path]),
-    Response:write_chunk(Msg),
-	Response;
+default_server() ->
+	lists:nth(1, lrb:disk_logger_names()).
+	
+tab_content(ServerName) ->
+	lr_tabs:render({data, ServerName, lrb:disk_logger_names()}).
 
-feed(Response, Path, N) ->
-    timer:sleep(1000),
-    Msg = io_lib:format("Chunk ~w for id ~s\n", [N, Path]),
-    Response:write_chunk(Msg),
-    feed(Response, Path, N+1).
+opts([], Dict) -> 
+	Dict;
+opts([{_, []}|Tail], Dict) ->
+	opts(Tail, Dict);
+opts([{Key,Val}|Tail], Dict) ->
+	Key1 = dict_key(Key),
+	Val1 = dict_val(Key1, Val),
+	case dict:is_key(Key1, Dict) of
+		true ->
+			opts(Tail, dict:append_list(Key1, Val1, Dict));
+		false ->
+			opts(Tail, dict:store(Key1, Val1, Dict))
+	end.	
 
 %% internal functions
-set_app_values([], Args) -> Args;
-
-set_app_values([Key|Tail], Args) ->
+get_arg_value(Key, Args, Default) ->
 	case proplists:get_value(Key, Args) of
-		undefined ->
+		undefined -> 
 			case application:get_env(log_roller_server, Key) of
-				{ok, Val} ->
-					set_app_values(Tail, [{Key, Val} | Args]);
-				undefined ->
-					set_app_values(Tail, Args)
+				{ok, Val} -> Val;
+				undefined -> Default
 			end;
-		_ ->
-			set_app_values(Tail, Args)
+		Val -> Val
 	end.
 	
+get_arg_value(doc_root, Args) ->
+    case proplists:get_value(doc_root, Args) of
+		undefined -> 
+			case application:get_env(log_roller_server, doc_root) of
+				{ok, Val} -> Val;
+				undefined ->
+				    case code:lib_dir(log_roller) of
+                        {error, bad_name} -> 
+                            {ok, Dir} = file:get_cwd(), 
+                            Dir ++ "/public";
+                        LibDir -> 
+                            LibDir ++ "/public"
+                    end
+			end;
+		Val -> Val
+	end.
+	
+dict_key("server") -> server;
 dict_key("max") -> max;
 dict_key("type") -> types;
 dict_key("node") -> nodes;
 dict_key("grep") -> grep.
 
+dict_val(server, Val) -> list_to_atom(Val);
 dict_val(max, Val) -> 
 	case (catch list_to_integer(Val)) of
-		{'EXIT', _} -> 0;
+		{'EXIT', _} -> infinity;
 		Int -> Int
 	end;
 dict_val(types, Val) -> [list_to_atom(Val), list_to_atom(Val ++ "_report")];
 dict_val(nodes, Val) -> [list_to_atom(Val)];
 dict_val(grep, Val) -> Val.
+
+get_nodes(Server) ->
+	Nodes1 = 
+		case lists:filter(fun(#disk_logger{name=Name}) -> Name == Server end, lrb:disk_loggers()) of
+			[#disk_logger{filters=Filters}] ->
+				case proplists:get_value(nodes, Filters) of
+					undefined ->
+						[node()|nodes()];
+					Nodes ->
+						Nodes
+				end;
+			_ -> 
+				[node()|nodes()]
+		end,
+	lists:sort(Nodes1).
+	

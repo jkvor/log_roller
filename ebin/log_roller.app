@@ -1,6 +1,6 @@
 {application, log_roller, [
     {description, "log_roller"},
-    {vsn, "0.2"},
+    {vsn, "0.3"},
     {modules, [
         log_roller,
 		log_roller_h

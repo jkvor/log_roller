@@ -20,45 +20,33 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(log_roller_cache).
+-module(log_roller_tail).
 -author('jacob.vorreuter@gmail.com').
 -behaviour(gen_server).
+
+-include("log_roller.hrl").
+
+-record(buffer, {log_name, logs}).
+-record(state, {buffers=[], responses=[]}).
+
+-define(TIMER_VALUE, 2000).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([add/1, get/2, put/3, delete/2, size/1, items/1]).
+-export([add_response/3, get_responses/0]).
 
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-%% @spec add(integer()) -> CacheStr::string()
-add(CacheSizeInBytes) ->
-	gen_server:call(?MODULE, {add, CacheSizeInBytes}).
-
-%% @spec get(string()) -> undefined | any()	
-get(CacheStr, Key) when is_list(CacheStr), is_list(Key) ->
-	gen_server:call(?MODULE, {get, CacheStr, Key}).
+add_response(LogName, Opts, Response) ->
+	gen_server:call(?MODULE, {add_response, LogName, Opts, Response}).
 	
-%% @spec put(list(), binary()) -> ok
-put(CacheStr, Key, Val) when is_list(CacheStr), is_list(Key), is_binary(Val) ->
-	gen_server:call(?MODULE, {put, CacheStr, Key, Val});
-	
-put(_, _, _) ->
-	exit({error, cache_value_must_be_binary}).
-
-%% @spec delete(string()) -> ok
-delete(CacheStr, Key) when is_list(CacheStr), is_list(Key) ->
-	gen_server:call(?MODULE, {delete, CacheStr, Key}).
-	
-size(CacheStr) when is_list(CacheStr) ->
-	gen_server:call(?MODULE, {size, CacheStr}).
-	
-items(CacheStr) when is_list(CacheStr) ->
-	gen_server:call(?MODULE, {items, CacheStr}).
-	
+get_responses() ->
+    gen_server:call(?MODULE, get_responses).
+    
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -71,8 +59,9 @@ items(CacheStr) when is_list(CacheStr) ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init(_) ->
-	{ok, []}.
+init(_) -> 
+    erlang:start_timer(?TIMER_VALUE, ?MODULE, flush),
+    {ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -84,30 +73,12 @@ init(_) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call({add, CacheSizeInBytes}, _From, State) ->
-	{ok, Cache} = cherly:start(CacheSizeInBytes),
-	CacheStr = cache_to_list(Cache),
-	{reply, CacheStr, [{CacheStr, Cache}|State]};
+handle_call({add_response, LogName, Opts, Response}, _From, State) ->
+    Responses = State#state.responses,
+	{reply, ok, State#state{responses=[{LogName, {Opts, Response}}|Responses]}};
 	
-handle_call({get, CacheStr, Key}, _From, State) ->
-	Cache = proplists:get_value(CacheStr, State),
-	{reply, get_internal(Cache, Key), State};
-
-handle_call({put, CacheStr, Key, Val}, _From, State) ->
-	Cache = proplists:get_value(CacheStr, State),
-	{reply, put_internal(Cache, Key, Val), State};
-
-handle_call({delete, CacheStr, Key}, _From, State) ->
-	Cache = proplists:get_value(CacheStr, State),
-	{reply, delete_internal(Cache, Key), State};
-	
-handle_call({size, CacheStr}, _From, State) ->
-	Cache = proplists:get_value(CacheStr, State),
-	{reply, cherly:size(Cache), State};
-
-handle_call({items, CacheStr}, _From, State) ->
-	Cache = proplists:get_value(CacheStr, State),
-	{reply, cherly:items(Cache), State}.
+handle_call(get_responses, _From, Responses) ->
+    {reply, Responses, Responses}.
 	
 %%--------------------------------------------------------------------
 %% Function: handle_cast(Msg, State) -> {noreply, State} |
@@ -116,6 +87,20 @@ handle_call({items, CacheStr}, _From, State) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast({log, LogName, LogEntry}, State) ->
+    Buffers = State#state.buffers,
+    NewState =
+        case lists:keyfind(LogName, 2, Buffers) of
+            false ->
+                State#state{buffers=[#buffer{log_name=LogName, logs=[LogEntry]}|Buffers]};
+            Buffer ->
+                NewBuffer = Buffer#buffer{logs=[LogEntry|Buffer#buffer.logs]},
+                State#state{
+                    buffers=lists:keyreplace(LogName, 2, State#state.buffers, NewBuffer)
+                }
+        end,
+    {noreply, NewState};
+    
 handle_cast(_Message, State) -> {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -125,6 +110,17 @@ handle_cast(_Message, State) -> {noreply, State}.
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------	
+handle_info({timeout,_,flush}, State) ->
+    [begin
+        [begin
+            Terms = [log_roller_utils:format_log_entry(Log) || Log <- Buffer#buffer.logs],
+            Content = lr_logs:render({data, Terms}),
+            (catch Response:write_chunk(Content))
+         end || {LogName, {Opts, Response}} <- State#state.responses, LogName == Buffer#buffer.log_name]
+     end || Buffer <- State#state.buffers],
+    erlang:start_timer(?TIMER_VALUE, ?MODULE, flush),
+    {noreply, State#state{buffers=[]}};
+
 handle_info(_Info, State) -> error_logger:info_msg("info: ~p~n", [_Info]), {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -143,34 +139,4 @@ terminate(_Reason, _State) -> ok.
 %% @hidden
 %%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
-
-%%--------------------------------------------------------------------
-%%% Internal functions
-%%--------------------------------------------------------------------
-cache_to_list({cherly, Port}) ->
-	erlang:port_to_list(Port).
-	
-get_internal(Cache, Key) when is_tuple(Cache), is_list(Key) ->
-	case cherly:get(Cache, Key) of
-		not_found -> 
-			undefined;
-		{ok, Value} -> 
-			Value
-	end.
-		
-put_internal(Cache, Key, Val) when is_tuple(Cache), is_list(Key), is_binary(Val) ->
-	case cherly:put(Cache, Key, Val) of
-		true ->
-			ok;
-		Err ->
-			io:format("failed to place in cache ~p: ~p~n", [Key, Err]),
-			{error, cache_put_failed}
-	end.
-
-delete_internal(Cache, Key) when is_tuple(Cache), is_list(Key) ->
-	case cherly:remove(Cache, Key) of
-		true ->
-			ok;
-		_ ->
-			{error, cache_remove_failed}
-	end.
+    

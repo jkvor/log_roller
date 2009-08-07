@@ -27,6 +27,9 @@ function page_load() {
 		method: 'get',
 		onSuccess: function(nodes) {
 			$('sl_node').innerHTML = nodes.responseText;
+			if($('sl_node').length > $('sl_node').size) {
+			    $('sl_node').size = $('sl_node').length;
+		    }
 		}
 	});
 	

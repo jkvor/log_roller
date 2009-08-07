@@ -72,11 +72,11 @@ handle(['GET', "servers", ServerName], Req, _DocRoot) ->
 	Req:respond({200, [?CONTENT_TYPE], Content});
 
 handle(['GET', "nodes"], Req, _DocRoot) ->
-	NodeOptions = lr_nodes:render({data, get_nodes(default_server())}),
+	NodeOptions = lr_nodes:render({data, get_nodes(default_server()), [node()|nodes()]}),
 	Req:respond({200, [?CONTENT_TYPE], NodeOptions});
 
 handle(['GET', "nodes", Server], Req, _DocRoot) ->
-	NodeOptions = lr_nodes:render({data, get_nodes(list_to_atom(Server))}),
+	NodeOptions = lr_nodes:render({data, get_nodes(list_to_atom(Server)), [node()|nodes()]}),
 	Req:respond({200, [?CONTENT_TYPE], NodeOptions});
 	
 handle(_, _, _) -> no_match.
@@ -213,17 +213,18 @@ dict_val(nodes, Val) -> [list_to_atom(Val)];
 dict_val(grep, Val) -> Val.
 
 get_nodes(Server) ->
+    ActiveNodes = [node()|nodes()],
 	Nodes1 = 
 		case lists:filter(fun(#disk_logger{name=Name}) -> Name == Server end, lrb:disk_loggers()) of
 			[#disk_logger{filters=Filters}] ->
 				case proplists:get_value(nodes, Filters) of
 					undefined ->
-						[node()|nodes()];
+						ActiveNodes;
 					Nodes ->
 						Nodes
 				end;
 			_ -> 
-				[node()|nodes()]
+				ActiveNodes
 		end,
 	lists:sort(Nodes1).
 	

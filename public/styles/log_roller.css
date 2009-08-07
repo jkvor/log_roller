@@ -85,6 +85,14 @@ a.tab_link:link {
 	z-index: 100;
 }
 
+.node_up {
+    background-color: #FFFFFF;
+}
+
+.node_down {
+    background-color: #FED9D4;
+}
+
 span {
 	color: #000000;
 }

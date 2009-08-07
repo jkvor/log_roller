@@ -57,7 +57,6 @@ sync(LoggerName) when is_atom(LoggerName) ->
 %%		 Node = node()
 %% @doc send a message to the specified node, registering the gen_server process as a subscriber
 register_as_subscriber_with(LoggerName, Node) when is_atom(LoggerName), is_atom(Node) ->
-	io:format("subscribe ~p to ~p~n", [LoggerName, Node]),
 	gen_server:call(?Server_Name(LoggerName), {register_as_subscriber_with, Node}).
 
 %% @spec ping(FromNode) -> [{ok, Pid}]
@@ -66,7 +65,6 @@ register_as_subscriber_with(LoggerName, Node) when is_atom(LoggerName), is_atom(
 %% @doc respond to ping requests sent from publisher nodes with the gen_server process id
 ping(FromNode) when is_atom(FromNode) ->
     Subscriptions = log_roller_server:determine_subscriptions(),
-    io:format("subs: ~p~n", [Subscriptions]),
     lists:foldl(
         fun ({Logger, []}, Acc) ->
                 [gen_server:call(?Server_Name(Logger#disk_logger.name), ping)|Acc];
@@ -148,7 +146,6 @@ handle_call(sync, _From, #state{log=Log}=State) ->
 	{reply, disk_log:sync(Log), State};
 	
 handle_call({register_as_subscriber_with, Node}, _From, State) ->
-	io:format("sending msg to ~p~n", [Node]),
 	Res = gen_event:call({error_logger, Node}, log_roller_h, {subscribe, self()}),
 	{reply, Res, State};
 
@@ -200,8 +197,7 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, to
 				LogSize = size(BinLog),
 				Bin = <<?Bin_Term_Start/binary, LogSize:16, BinLog:LogSize/binary, ?Bin_Term_Stop/binary>>,
 				disk_log:blog(Log, Bin),
-				io:format("sending ~p to tail~n", [LogEntry]),
-				erlang:send(log_roller_tail, {log, Log, LogEntry}),
+				gen_server:abcast(log_roller_tail, {log, Log, LogEntry}),
 				State#state{total_writes=Writes+1}			
 		end,
 	{noreply, State1};

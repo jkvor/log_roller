@@ -26,6 +26,11 @@
 
 -include("log_roller.hrl").
 
+-record(buffer, {log_name, logs}).
+-record(state, {buffers=[], responses=[]}).
+
+-define(TIMER_VALUE, 2000).
+
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 		 handle_info/2, terminate/2, code_change/3]).
@@ -54,7 +59,9 @@ get_responses() ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init(_) -> {ok, []}.
+init(_) -> 
+    erlang:start_timer(?TIMER_VALUE, ?MODULE, flush),
+    {ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -66,8 +73,9 @@ init(_) -> {ok, []}.
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call({add_response, LogName, Opts, Response}, _From, Responses) ->
-	{reply, ok, [{LogName, {Opts, Response}}|Responses]};
+handle_call({add_response, LogName, Opts, Response}, _From, State) ->
+    Responses = State#state.responses,
+	{reply, ok, State#state{responses=[{LogName, {Opts, Response}}|Responses]}};
 	
 handle_call(get_responses, _From, Responses) ->
     {reply, Responses, Responses}.
@@ -79,6 +87,20 @@ handle_call(get_responses, _From, Responses) ->
 %% Description: Handling cast messages
 %% @hidden
 %%--------------------------------------------------------------------
+handle_cast({log, LogName, LogEntry}, State) ->
+    Buffers = State#state.buffers,
+    NewState =
+        case lists:keyfind(LogName, 2, Buffers) of
+            false ->
+                State#state{buffers=[#buffer{log_name=LogName, logs=[LogEntry]}|Buffers]};
+            Buffer ->
+                NewBuffer = Buffer#buffer{logs=[LogEntry|Buffer#buffer.logs]},
+                State#state{
+                    buffers=lists:keyreplace(LogName, 2, State#state.buffers, NewBuffer)
+                }
+        end,
+    {noreply, NewState};
+    
 handle_cast(_Message, State) -> {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -88,22 +110,16 @@ handle_cast(_Message, State) -> {noreply, State}.
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------	
-handle_info({log, LogName, LogEntry}, Responses) ->
-    Responses1 = 
-        case proplists:get_value(LogName, Responses) of
-            undefined ->
-                Responses;
-            {_Opts, Response} ->
-                Term = log_roller_utils:format_log_entry(LogEntry),
-                Content = lr_logs:render({data, [Term]}),
-                case (catch Response:write_chunk(Content)) of
-                    ok -> 
-                        Responses;
-                    {'EXIT', _} ->
-                        proplists:delete(LogName, Responses)
-                end
-        end,
-    {noreply, Responses1};
+handle_info({timeout,_,flush}, State) ->
+    [begin
+        [begin
+            Terms = [log_roller_utils:format_log_entry(Log) || Log <- Buffer#buffer.logs],
+            Content = lr_logs:render({data, Terms}),
+            (catch Response:write_chunk(Content))
+         end || {LogName, {Opts, Response}} <- State#state.responses, LogName == Buffer#buffer.log_name]
+     end || Buffer <- State#state.buffers],
+    erlang:start_timer(?TIMER_VALUE, ?MODULE, flush),
+    {noreply, State#state{buffers=[]}};
 
 handle_info(_Info, State) -> error_logger:info_msg("info: ~p~n", [_Info]), {noreply, State}.
 
@@ -123,3 +139,4 @@ terminate(_Reason, _State) -> ok.
 %% @hidden
 %%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
+    

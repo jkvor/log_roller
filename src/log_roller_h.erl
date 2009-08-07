@@ -119,7 +119,6 @@ handle_call(subscribers, State) ->
 	{ok, State#state.listening_pids, State};
 	
 handle_call(_Request, State) ->
-	error_logger:info_msg("handle other call: ~p~n", [_Request]),
     {ok, ok, State}.
 
 %%----------------------------------------------------------------------
@@ -137,7 +136,8 @@ handle_info(_Info, State) ->
 %% @hidden
 %%----------------------------------------------------------------------
 terminate(_Reason, _State) ->
-    error_logger:add_report_handler(?MODULE).
+    %error_logger:add_report_handler(?MODULE),
+    ok.
 
 %% @hidden
 code_change(_OldVsn, State, _Extra) ->

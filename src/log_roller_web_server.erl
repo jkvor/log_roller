@@ -33,7 +33,7 @@
 start_link(Args) when is_list(Args) ->
 	Address = get_arg_value(address, Args, ?DEFAULT_ADDRESS),
 	Port = get_arg_value(port, Args, ?DEFAULT_PORT),
-	DocRoot = get_arg_value(doc_root, Args, begin {ok, Dir} = file:get_cwd(), Dir ++ "/public" end),
+	DocRoot = get_arg_value(doc_root, Args),
 	Loop = fun (Req) -> ?MODULE:loop(Req, DocRoot) end,
 	io:format("starting web_server ~p ~p ~p~n", [Address, Port, DocRoot]),
 	mochiweb_http:start([{loop, Loop}, {ip, Address}, {port, Port}]).
@@ -113,7 +113,7 @@ serve_logs(Params, Req) ->
 fetch_logs(Resp, Cont, Opts, Max) ->
 	case (catch lrb:fetch(Cont, Opts)) of
 		{'EXIT', Error} ->
-			error_logger:error_report({?MODULE, ?LINE, Error}),
+			error_logger:error_report({?MODULE, ?LINE, Cont, Error}),
 			ok;
 		{Cont1, Logs} ->
 			if
@@ -124,12 +124,19 @@ fetch_logs(Resp, Cont, Opts, Max) ->
         			        Resp:write_chunk(Content),
         			        fetch_logs(Resp, Cont1, Opts, Max);
         			    NumItems when is_integer(NumItems), NumItems >= Max ->
+        			        PrevNumItems = 
+        			            if
+        			                is_record(Cont, continuation) ->
+        			                    ?GET_CSTATE(Cont, num_items);
+        			                true ->
+        			                    0
+        			            end,
         			        Logs2 = 
-            			        case ?GET_CSTATE(Cont, num_items) of
-            			            PrevNumItems when is_integer(PrevNumItems) ->
+            			        if
+            			            is_integer(PrevNumItems) ->
             			                {Logs1, _} = lists:split(Max - PrevNumItems, Logs),
             			                Logs1;
-            			            _ ->
+            			            true ->
             			                Logs
             			        end,
     			            Content = lr_logs:render({data, Logs2}),
@@ -172,6 +179,23 @@ get_arg_value(Key, Args, Default) ->
 		Val -> Val
 	end.
 	
+get_arg_value(doc_root, Args) ->
+    case proplists:get_value(doc_root, Args) of
+		undefined -> 
+			case application:get_env(log_roller_server, doc_root) of
+				{ok, Val} -> Val;
+				undefined ->
+				    case code:lib_dir(log_roller) of
+                        {error, bad_name} -> 
+                            {ok, Dir} = file:get_cwd(), 
+                            Dir ++ "/public";
+                        LibDir -> 
+                            LibDir ++ "/public"
+                    end
+			end;
+		Val -> Val
+	end.
+	
 dict_key("server") -> server;
 dict_key("max") -> max;
 dict_key("type") -> types;
@@ -181,7 +205,7 @@ dict_key("grep") -> grep.
 dict_val(server, Val) -> list_to_atom(Val);
 dict_val(max, Val) -> 
 	case (catch list_to_integer(Val)) of
-		{'EXIT', _} -> 0;
+		{'EXIT', _} -> infinity;
 		Int -> Int
 	end;
 dict_val(types, Val) -> [list_to_atom(Val), list_to_atom(Val ++ "_report")];

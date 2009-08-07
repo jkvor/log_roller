@@ -1,4 +1,4 @@
-VERSION=0.2
+VERSION=0.3
 LIBDIR=`erl -eval 'io:format("~s~n", [code:lib_dir()])' -s init stop -noshell`
 ROOTDIR=`erl -eval 'io:format("~s~n", [code:root_dir()])' -s init stop -noshell`
 
@@ -21,16 +21,16 @@ docs: all
 	erl -eval 'edoc:application(log_roller, ".", [])' -s init stop -noinput
 
 install:
-	mkdir -p $(prefix)/$(LIBDIR)/log_roller-$(VERSION)/{ebin,include,priv}
+	mkdir -p $(prefix)/$(LIBDIR)/log_roller-$(VERSION)/{ebin,include,priv,public}
 	mkdir -p $(prefix)/$(ROOTDIR)/bin
 	for i in ebin/*.beam include/* priv/* ebin/*.app; do install $$i $(prefix)/$(LIBDIR)/log_roller-$(VERSION)/$$i ; done
+	cp -r public/* $(prefix)/$(LIBDIR)/log_roller-$(VERSION)/public/
 	cp bin/*.boot $(prefix)/$(ROOTDIR)/bin/
 	@mkdir -p $(prefix)/etc/init.d
-	mkdir -p $(prefix)/var/log/log_roller
 	cp log_roller $(prefix)/etc/init.d/
 
 package: clean
-	@mkdir log_roller-$(VERSION)/ && cp -rf bin ebin include log_roller Makefile priv README src t templates log_roller-$(VERSION)
+	@mkdir log_roller-$(VERSION)/ && cp -rf bin ebin include log_roller Makefile priv public README src support t templates log_roller-$(VERSION)
 	@COPYFILE_DISABLE=true tar zcf log_roller-$(VERSION).tgz log_roller-$(VERSION)
 	@rm -rf log_roller-$(VERSION)/
 	

@@ -25,13 +25,15 @@
 -behaviour(application).
 
 -export([
-	start/2, stop/1, start_phase/3, queue_length/0,
+	start/0, start/2, stop/1, start_phase/3, queue_length/0,
 	register_subscriber/1, get_registered_subscribers/0
 ]).
 
 %%%
 %%% Application API
 %%%
+start() ->
+    application:start(?MODULE).
 
 %% @spec start(StartType, StartArgs) -> {ok, Pid}
 %% @doc start the application
@@ -40,7 +42,7 @@ start(_StartType, _StartArgs) ->
 	{ok, self()}.
 	
 %% @doc stop the application
-stop(_) -> 
+stop(_) ->
 	ok.
 
 get_registered_subscribers() ->
@@ -68,7 +70,6 @@ start_phase(discovery, _, _) ->
 register_subscriber(Node) when is_atom(Node) ->
 	case catch rpc:call(Node, log_roller_disk_logger, ping, [node()]) of
 		List when is_list(List) ->
-			io:format("ping successful for ~p: ~p~n", [Node, List]),
 			[begin
 				gen_event:call(error_logger, log_roller_h, {subscribe, Pid})
 			 end || {ok, Pid} <- List];
@@ -76,7 +77,6 @@ register_subscriber(Node) when is_atom(Node) ->
 			ok;
 		{error, application_not_running} ->
 			ok;
-		Err ->
-			io:format("failed to register ~p: ~p~n", [Node, Err]),
+		_Err ->
 			ok
 	end.

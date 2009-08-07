@@ -6,13 +6,13 @@ Event.observe(document, 'keypress',  key_pressed);
 function key_pressed(event) { 
     if(event.keyCode == 13) { 
 		refresh();
-	} else if (event.keyCode == 102) {
+	} /*else if (event.keyCode == 102) {
 	    toggle_filters();
 	} else if (event.keyCode == 91) {
 	    prev_tab();
 	} else if (event.keyCode == 93) {
         next_tab();
-	}
+	}*/
 }
 
 function page_load() {
@@ -33,23 +33,25 @@ function page_load() {
 	refresh();
 }
 
+function get_params() {
+    return {   
+        server: $('server').getValue(),
+		type: $('sl_type').getValue(), 
+		node: $('sl_node').getValue(),
+		grep: $('grep').getValue(),
+		max: $('max').getValue() 
+	};
+}
+
 function refresh() {
 	$('log_frame').innerHTML = '';
+	$('int_log_frame').innerHTML = '';
 	
 	new Ajax.Request("/logs", {
 		method: 'post',
-		parameters: {
-			server: $('server').value,
-			type: $('sl_type').value, 
-			node: $('sl_node').value,
-			grep: $('grep').value,
-			max: $('max').value
-		},
+		parameters: get_params(),
 		onCreate: function(request) {
-			for(var i=0; i<g_requests.length; i++) {
-				try { g_requests[i].transport.abort(); } catch(e) {}
-				$('int_log_frame').innerHTML = '';
-			}
+			stop_existing_requests();
 			g_requests.push(request);
 			$('ajax-loader').style.display = 'inline';
 		},
@@ -68,38 +70,60 @@ function refresh() {
 }
 
 function tail() {
-    $('log_frame').innerHTML = '';
+    if($('btn_tail').value == 'Stop Tailing') {
+        $('btn_tail').value = 'Tail Log';
+        stop_existing_requests();
+        return;
+    }
+    
+    var log_frame = $('log_frame');
+    
+    var max_size = 10;
+    
+    log_frame.innerHTML = '';
+    $('btn_tail').value = 'Stop Tailing';
 	
 	new Ajax.Request("/tail", {
 		method: 'post',
-		parameters: {
-			server: $('server').value,
-			type: $('sl_type').value, 
-			node: $('sl_node').value,
-			grep: $('grep').value
-		},
+		parameters: get_params(),
 		onCreate: function(request) {
-			for(var i=0; i<g_requests.length; i++) {
-				try { g_requests[i].transport.abort(); } catch(e) {}
-				$('log_frame').innerHTML = '';
-			}
+			stop_existing_requests();
 			g_requests.push(request);
 			$('ajax-loader').style.display = 'inline';
 		},
 		onInteractive: function(logs) {
-			$('log_frame').innerHTML = logs.responseText;
+		    var tmp = new Element('div');
+		    tmp.innerHTML = logs.responseText;
+		    var c = tmp.childElements();
+			if(c.length > max_size) {
+			    log_frame.innerHTML = '';
+			    for(var i=c.length-max_size; i<c.length; i++) {
+			        log_frame.insert(c[i]);
+			    }
+		    } else {
+		        log_frame.innerHTML = tmp.innerHTML;
+		    }
+			//$('end').scrollIntoView(true);
 		},
 		onComplete: function(logs) {
 			$('ajax-loader').style.display = 'none';
+			$('btn_tail').value = 'Tail Log';
 		}
 	});
+}
+
+function stop_existing_requests() {
+    for(var i=0; i<g_requests.length; i++) {
+		try { g_requests[i].transport.abort(); } catch(e) {}
+	}
 }
 
 function switch_server(server_name) {
 	$('server').value = server_name;
 	$('sl_type').selectedIndex = -1;
 	$('grep').value = '';
-	$('max').value = '';
+	$('max').value = '20';
+	stop_existing_requests();
 	page_load();
 }
 

@@ -25,7 +25,7 @@
 -behaviour(application).
 
 -export([
-	start/2, stop/1, init/1, start_phase/3, 
+	start/0, start/2, stop/1, init/1, start_phase/3, 
 	total_writes/0, determine_subscriptions/0, 
 	compile_templates/0, reload/0, build_rel/0
 ]).
@@ -35,6 +35,8 @@
 %%%
 %%% Application API
 %%%
+start() ->
+    application:start(?MODULE).
 
 %% @doc start the application
 start(_StartType, _StartArgs) -> 
@@ -138,11 +140,11 @@ reload() ->
 build_rel() ->
 	{ok, FD} = file:open("bin/log_roller_server.rel", [write]),
 	RelInfo = {release,
-	    {"log_roller_server", "0.2"},
+	    {"log_roller_server", "0.3"},
 	    {erts, "5.7.2"}, [
 	        {kernel, "2.13.2"},
 	        {stdlib, "1.16.2"},
-	        {log_roller_server, "0.2"}
+	        {log_roller_server, "0.3"}
 	    ]
 	},
 	io:format(FD, "~p.", [RelInfo]),

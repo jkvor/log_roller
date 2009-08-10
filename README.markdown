@@ -20,24 +20,32 @@ will attempt to connect. Make sure to have matching ~/.erlang.cookie
 files hosted on the servers running log_roller and log_roller_server. 
 The nodes will not be able to see each other otherwise.
 
+## Dependencies
+
+http://judy.sourceforge.net
+http://github.com/cliffmoon/cherly
+
 ## Installation
 Either clone the repository github.com/JacobVorreuter/log_roller
 or download the tarball from jacobvorreuter.github.com/log_roller
-and run "make && sudo make install"
+and run 
+
+	make
+	sudo make install
 
 ## Integration
 To begin logging messages with log_roller, simply start the
 log_roller application. This can be done either in the app file of your
 application:
 
-{application, my_app, [
-    {description, "my_app"},
-    {vsn, "0.3"},
-    {modules, []},
-    {registered, []},
-    {mod, {my_app, []}},
-    {applications, [kernel, stdlib, log_roller]}
-]}.
+	{application, my_app, [
+	    {description, "my_app"},
+	    {vsn, "0.3"},
+	    {modules, []},
+	    {registered, []},
+	    {mod, {my_app, []}},
+	    {applications, [kernel, stdlib, log_roller]}
+	]}.
 
 -or-
 
@@ -61,14 +69,14 @@ erl -name server@`hostname` -boot log_roller_server
 
 -or-
 
-{application, my_app, [
-    {description, "my_app"},
-    {vsn, "0.3"},
-    {modules, []},
-    {registered, []},
-    {mod, {my_app, []}},
-    {applications, [kernel, stdlib, log_roller_server]}
-]}.
+	{application, my_app, [
+	    {description, "my_app"},
+	    {vsn, "0.3"},
+	    {modules, []},
+	    {registered, []},
+	    {mod, {my_app, []}},
+	    {applications, [kernel, stdlib, log_roller_server]}
+	]}.
 
 -or-
 

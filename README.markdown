@@ -1,11 +1,11 @@
-== Highlights ==
+## Highlights
 * distributed nodes broadcast log messages to a central disk log
 * configure the max size and number of files in your rotating disk log
 * filter log messages into partitioned "buckets" based on node names, log types, and regexp matching
 * full featured web application for log monitoring and greping
 * extendable via event_handler registration for custom log routing
 
-== ABOUT ==
+## ABOUT
 Log_roller is based on a publisher/subscriber model. It integrates
 seamlessly with existing systems without the need to change code.
 Nodes designated as publishers (these are your app nodes running
@@ -20,12 +20,12 @@ will attempt to connect. Make sure to have matching ~/.erlang.cookie
 files hosted on the servers running log_roller and log_roller_server. 
 The nodes will not be able to see each other otherwise.
 
-== Installation ==
+## Installation
 Either clone the repository github.com/JacobVorreuter/log_roller
 or download the tarball from jacobvorreuter.github.com/log_roller
 and run "make && sudo make install"
 
-== Integration ==
+## Integration
 To begin logging messages with log_roller, simply start the
 log_roller application. This can be done either in the app file of your
 application:
@@ -74,7 +74,7 @@ erl -name server@`hostname` -boot log_roller_server
 
 log_roller_server:start()
 
-== CONFIGURATION ==
+## CONFIGURATION
 There is a config file, "log_roller.config" located in the priv 
 directory.  This will be installed to the priv directory in the
 log_roller lib directory inside your otp root directory. For
@@ -122,27 +122,27 @@ __Filtering to Multiple Buckets__
 		]},			
 	]}].
 
-== LICENSE ==
+## LICENSE
 
-Copyright (c) 2009 Jacob Vorreuter <jacob.vorreuter@gmail.com>
+	Copyright (c) 2009 Jacob Vorreuter <jacob.vorreuter@gmail.com>
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without
-restriction, including without limitation the rights to use,
-copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following
-conditions:
+	Permission is hereby granted, free of charge, to any person
+	obtaining a copy of this software and associated documentation
+	files (the "Software"), to deal in the Software without
+	restriction, including without limitation the rights to use,
+	copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the
+	Software is furnished to do so, subject to the following
+	conditions:
 
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
+	The above copyright notice and this permission notice shall be
+	included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+	EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+	OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+	NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+	HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+	WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+	OTHER DEALINGS IN THE SOFTWARE.

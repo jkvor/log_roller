@@ -45,7 +45,8 @@ teardown_test() ->
 rnd_dir() ->
 	{A1, A2, A3} = now(),
     random:seed(A1, A2, A3),
-	Dir = "." ++ lists:flatten([
+	file:make_dir("tmp"),
+	Dir = "tmp/." ++ lists:flatten([
         [[random:uniform(25) + 96] || _ <-lists:seq(1,5)],
         [[random:uniform(9) + 47] || _ <-lists:seq(1,3)]
     ]),

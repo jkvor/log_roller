@@ -15,7 +15,7 @@ rel: templates
 	erl -pa ebin -eval 'log_roller_server:build_rel()' -s init stop -noshell
 
 clean:
-	rm -rf ebin/*.beam doc/*.html doc/*.png doc/*-info doc/*.css bin/*.boot bin/*.rel bin/*.script Mnesia* erl_crash.dump *.tgz *.1 *.idx *.siz
+	rm -rf ebin/*.beam doc/*.html doc/*.png doc/*-info doc/*.css bin/*.boot bin/*.rel bin/*.script Mnesia* erl_crash.dump *.tgz *.1 *.idx *.siz tmp
 
 docs: all
 	erl -eval 'edoc:application(log_roller, ".", [])' -s init stop -noinput

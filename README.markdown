@@ -22,9 +22,9 @@ The nodes will not be able to see each other otherwise.
 
 ## Dependencies
 
-http://judy.sourceforge.net
+<http://judy.sourceforge.net>
 
-http://github.com/cliffmoon/cherly
+<http://github.com/cliffmoon/cherly>
 
 ## Installation
 Either clone the repository github.com/JacobVorreuter/log_roller

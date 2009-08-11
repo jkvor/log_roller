@@ -34,6 +34,21 @@
 	cache
 }).
 
+-define(DBG_REPORT(Args), log_roller_logger:do_log(dbg_report, ?MODULE, ?LINE, Args)).
+-define(DBG_MSG(Format, Args), log_roller_logger:do_log(dbg_msg, ?MODULE, ?LINE, Format, Args)).
+
+-define(INFO_REPORT(Args), log_roller_logger:do_log(info_report, ?MODULE, ?LINE, Args)).
+-define(INFO_MSG(Format, Args), log_roller_logger:do_log(info_msg, ?MODULE, ?LINE, Format, Args)).
+
+-define(WARNING_REPORT(Args), log_roller_logger:do_log(warning_report, ?MODULE, ?LINE, Args)).
+-define(WARNING_MSG(Format, Args), log_roller_logger:do_log(warning_msg, ?MODULE, ?LINE, Format, Args)).
+
+-define(ERROR_REPORT(Args), log_roller_logger:do_log(error_report, ?MODULE, ?LINE, Args)).
+-define(ERROR_MSG(Format, Args), log_roller_logger:do_log(error_msg, ?MODULE, ?LINE, Format, Args)).
+
+-define(CRITICAL_REPORT(Args), log_roller_logger:do_log(critical_report, ?MODULE, ?LINE, Args)).
+-define(CRITICAL_MSG(Format, Args), log_roller_logger:do_log(critical_msg, ?MODULE, ?LINE, Format, Args)).
+
 %-define(MAX_CHUNK_SIZE, 65536).
 -define(MAX_CHUNK_SIZE, 8192).
 -define(DEFAULT_TIMESTAMP, {9999,0,0}).

@@ -120,8 +120,7 @@ fetch_logs(Resp, Cont, Opts, Max) ->
 			    is_record(Cont1, continuation) ->
 			        case ?GET_CSTATE(Cont1, num_items) of
         			    NumItems when is_integer(NumItems), NumItems < Max ->
-        			        Content = lr_logs:render({data, Logs}),
-        			        Resp:write_chunk(Content),
+        			        do_write_chunk(Resp, Logs),
         			        fetch_logs(Resp, Cont1, Opts, Max);
         			    NumItems when is_integer(NumItems), NumItems >= Max ->
         			        PrevNumItems = 
@@ -139,14 +138,18 @@ fetch_logs(Resp, Cont, Opts, Max) ->
             			            true ->
             			                Logs
             			        end,
-    			            Content = lr_logs:render({data, Logs2}),
-        			        Resp:write_chunk(Content)
+    			            do_write_chunk(Resp, Logs2)
         			end;
         		true ->
-        		    Content = lr_logs:render({data, Logs}),
-			        Resp:write_chunk(Content)
+			        do_write_chunk(Resp, Logs)
         	end
 	end.
+
+do_write_chunk(_, []) -> ok;
+
+do_write_chunk(Resp, Logs) ->
+    Content = lr_logs:render({data, Logs}),
+    Resp:write_chunk(Content).
 
 default_server() ->
 	lists:nth(1, lrb:disk_logger_names()).

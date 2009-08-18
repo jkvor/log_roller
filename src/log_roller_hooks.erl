@@ -20,35 +20,27 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(log_roller_tail).
+-module(log_roller_hooks).
 -author('jacob.vorreuter@gmail.com').
 -behaviour(gen_server).
 
 -include("log_roller.hrl").
-
--record(buffer, {log_name, logs}).
--record(state, {buffers=[], responses=[]}).
-
--define(TIMER_VALUE, 2000).
 
 %% gen_server callbacks
 -export([start_link/0, init/1, handle_call/3, handle_cast/2, 
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([add_response/3, get_responses/0, send_log/1]).
+-export([add_hook/3, remove_hook/2]).
 
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-add_response(LogName, Opts, Response) ->
-	gen_server:call(?MODULE, {add_response, LogName, Opts, Response}).
+add_hook(Module, Function, BaseArgs) ->
+	gen_server:call(?MODULE, {add_hook, Module, Function, BaseArgs}).
 	
-get_responses() ->
-    gen_server:call(?MODULE, get_responses).
-    
-send_log(Log) ->
-    gen_server:abcast(?MODULE, Log).
+remove_hook(Module, Function) ->
+    gen_server:call(?MODULE, {remove_hook, Module, Function}).
     
 %%====================================================================
 %% gen_server callbacks
@@ -63,9 +55,7 @@ send_log(Log) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init(_) -> 
-    log_roller_hooks:add_hook(?MODULE, send_log, []),
-    erlang:start_timer(?TIMER_VALUE, ?MODULE, flush),
-    {ok, #state{}}.
+    {ok, dict:new()}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -77,12 +67,11 @@ init(_) ->
 %% Description: Handling call messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_call({add_response, LogName, Opts, Response}, _From, State) ->
-    Responses = State#state.responses,
-	{reply, ok, State#state{responses=[{LogName, {Opts, Response}}|Responses]}};
+handle_call({add_hook, Module, Function, BaseArgs}, _From, State) ->
+	{reply, ok, dict:store({Module, Function}, BaseArgs, State)};
 	
-handle_call(get_responses, _From, Responses) ->
-    {reply, Responses, Responses}.
+handle_call({remove_hook, Module, Function}, _From, State) ->
+    {reply, ok, dict:erase({Module, Function}, State)}.
 	
 %%--------------------------------------------------------------------
 %% Function: handle_cast(Msg, State) -> {noreply, State} |
@@ -92,18 +81,8 @@ handle_call(get_responses, _From, Responses) ->
 %% @hidden
 %%--------------------------------------------------------------------
 handle_cast({log, LogName, LogEntry}, State) ->
-    Buffers = State#state.buffers,
-    NewState =
-        case lists:keyfind(LogName, 2, Buffers) of
-            false ->
-                State#state{buffers=[#buffer{log_name=LogName, logs=[LogEntry]}|Buffers]};
-            Buffer ->
-                NewBuffer = Buffer#buffer{logs=[LogEntry|Buffer#buffer.logs]},
-                State#state{
-                    buffers=lists:keyreplace(LogName, 2, State#state.buffers, NewBuffer)
-                }
-        end,
-    {noreply, NewState};
+    [spawn(Module, Function, lists:append(BaseArgs, [{log, LogName, LogEntry}])) || {{Module, Function}, BaseArgs} <- dict:to_list(State)],
+    {noreply, State};
     
 handle_cast(_Message, State) -> {noreply, State}.
 
@@ -114,18 +93,7 @@ handle_cast(_Message, State) -> {noreply, State}.
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------	
-handle_info({timeout,_,flush}, State) ->
-    [begin
-        [begin
-            Terms = [log_roller_utils:format_log_entry(Log) || Log <- Buffer#buffer.logs],
-            Content = lr_logs:render({data, Terms}),
-            (catch Response:write_chunk(Content))
-         end || {LogName, {_Opts, Response}} <- State#state.responses, LogName == Buffer#buffer.log_name]
-     end || Buffer <- State#state.buffers],
-    erlang:start_timer(?TIMER_VALUE, ?MODULE, flush),
-    {noreply, State#state{buffers=[]}};
-
-handle_info(_Info, State) -> error_logger:info_msg("info: ~p~n", [_Info]), {noreply, State}.
+handle_info(_Info, State) -> {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% Function: terminate(Reason, State) -> void()

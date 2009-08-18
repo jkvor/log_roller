@@ -197,7 +197,7 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, to
 				LogSize = size(BinLog),
 				Bin = <<?Bin_Term_Start/binary, LogSize:16, BinLog:LogSize/binary, ?Bin_Term_Stop/binary>>,
 				disk_log:blog(Log, Bin),
-				gen_server:abcast(log_roller_tail, {log, Log, LogEntry}),
+				gen_server:abcast(log_roller_hooks, {log, Log, LogEntry}),
 				State#state{total_writes=Writes+1}			
 		end,
 	{noreply, State1};

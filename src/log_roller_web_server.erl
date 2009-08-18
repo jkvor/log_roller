@@ -113,36 +113,32 @@ serve_logs(Params, Req) ->
 fetch_logs(Resp, Cont, Opts, Max) ->
 	case (catch lrb:fetch(Cont, Opts)) of
 		{'EXIT', Error} ->
-			error_logger:error_report({?MODULE, ?LINE, Cont, Error}),
-			ok;
-		{Cont1, Logs} ->
-			if
-			    is_record(Cont1, continuation) ->
-			        case ?GET_CSTATE(Cont1, num_items) of
-        			    NumItems when is_integer(NumItems), NumItems < Max ->
-        			        do_write_chunk(Resp, Logs),
-        			        fetch_logs(Resp, Cont1, Opts, Max);
-        			    NumItems when is_integer(NumItems), NumItems >= Max ->
-        			        PrevNumItems = 
-        			            if
-        			                is_record(Cont, continuation) ->
-        			                    ?GET_CSTATE(Cont, num_items);
-        			                true ->
-        			                    0
-        			            end,
-        			        Logs2 = 
-            			        if
-            			            is_integer(PrevNumItems) ->
-            			                {Logs1, _} = lists:split(Max - PrevNumItems, Logs),
-            			                Logs1;
-            			            true ->
-            			                Logs
-            			        end,
-    			            do_write_chunk(Resp, Logs2)
-        			end;
-        		true ->
-			        do_write_chunk(Resp, Logs)
-        	end
+			Resp:write_chunk(io_lib:format("cont: ~p, error: ~p~n", [Cont, Error]));
+		{Cont1, Logs} when is_record(Cont1, continuation) ->
+	        case ?GET_CSTATE(Cont1, num_items) of
+			    NumItems when is_integer(NumItems), NumItems < Max ->
+			        do_write_chunk(Resp, Logs),
+			        fetch_logs(Resp, Cont1, Opts, Max);
+			    NumItems when is_integer(NumItems), NumItems >= Max ->
+			        PrevNumItems = 
+			            if
+			                is_record(Cont, continuation) ->
+			                    ?GET_CSTATE(Cont, num_items);
+			                true ->
+			                    0
+			            end,
+			        Logs2 = 
+    			        if
+    			            is_integer(PrevNumItems) ->
+    			                {Logs1, _} = lists:split(Max - PrevNumItems, Logs),
+    			                Logs1;
+    			            true ->
+    			                Logs
+    			        end,
+		            do_write_chunk(Resp, Logs2)
+			end;
+        {_, Logs} ->
+			do_write_chunk(Resp, Logs)
 	end.
 
 do_write_chunk(_, []) -> ok;
@@ -203,8 +199,10 @@ dict_key("server") -> server;
 dict_key("max") -> max;
 dict_key("type") -> types;
 dict_key("node") -> nodes;
+dict_key("cache") -> cache;
 dict_key("grep") -> grep.
 
+dict_val(cache, Val) -> list_to_atom(Val);
 dict_val(server, Val) -> list_to_atom(Val);
 dict_val(max, Val) -> 
 	case (catch list_to_integer(Val)) of

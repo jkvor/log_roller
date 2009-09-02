@@ -87,31 +87,31 @@ logger_src(ModuleName, LogLevel) when is_integer(LogLevel) ->
          critical_msg/4
     ]).
 
-    debug_report(Module, Line, Args) when " ++ L ++ " >= 5 -> error_logger:info_report({Module, Line, Args});
+    debug_report(Module, Line, Args) when " ++ L ++ " >= 5 -> error_logger:info_report([Module, Line, Args]);
     debug_report(_, _, _) -> ok.
     
     debug_msg(Module, Line, Format, Args) when " ++ L ++ " >= 5 -> error_logger:info_msg(\"[\~p:\~w] \" ++ Format, [Module,Line|Args]);
     debug_msg(_, _, _, _) -> ok.
 
-    info_report(Module, Line, Args) when " ++ L ++ " >= 4 -> error_logger:info_report({Module, Line, Args});
+    info_report(Module, Line, Args) when " ++ L ++ " >= 4 -> error_logger:info_report([Module, Line, Args]);
     info_report(_, _, _) -> ok.
     
     info_msg(Module, Line, Format, Args) when " ++ L ++ " >= 4 -> error_logger:info_msg(\"[\~p:\~w] \" ++ Format, [Module,Line|Args]);
     info_msg(_, _, _, _) -> ok.
     
-    warning_report(Module, Line, Args) when " ++ L ++ " >= 3 -> error_logger:warning_report({Module, Line, Args});
+    warning_report(Module, Line, Args) when " ++ L ++ " >= 3 -> error_logger:warning_report([Module, Line, Args]);
     warning_report(_, _, _) -> ok.
     
     warning_msg(Module, Line, Format, Args) when " ++ L ++ " >= 3 -> error_logger:warning_msg(\"[\~p:\~w] \" ++ Format, [Module,Line|Args]);
     warning_msg(_, _, _, _) -> ok.
     
-    error_report(Module, Line, Args) when " ++ L ++ " >= 2 -> error_logger:error_report({Module, Line, Args});
+    error_report(Module, Line, Args) when " ++ L ++ " >= 2 -> error_logger:error_report([Module, Line, Args]);
     error_report(_, _, _) -> ok.
     
     error_msg(Module, Line, Format, Args) when " ++ L ++ " >= 2 -> error_logger:error_msg(\"[\~p:\~w] \" ++ Format, [Module,Line|Args]);
     error_msg(_, _, _, _) -> ok.
 
-    critical_report(Module, Line, Args) when " ++ L ++ " >= 1 -> error_logger:error_report({Module, Line, Args});
+    critical_report(Module, Line, Args) when " ++ L ++ " >= 1 -> error_logger:error_report([Module, Line, Args]);
     critical_report(_, _, _) -> ok.
     
     critical_msg(Module, Line, Format, Args) when " ++ L ++ " >= 1 -> error_logger:error_msg(\"[\~p:\~w] \" ++ Format, [Module,Line|Args]);

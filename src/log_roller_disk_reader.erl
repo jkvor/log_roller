@@ -77,7 +77,7 @@ terms(Cont) ->
 	
 %% lookup cache frames by the key {Index, Pos} and delete
 invalidate_cache_frame(Cache, Index, Pos) when Pos >= 0 ->
-	log_roller_cache:delete(Cache, key({Index, Pos})),
+	log_roller_cache:delete(Cache, key({Cache, Index, Pos})),
 	invalidate_cache_frame(Cache, Index, Pos-?MAX_CHUNK_SIZE);
 	
 invalidate_cache_frame(_, _, _) -> ok.
@@ -102,7 +102,7 @@ get_cache_frame(LoggerName, Cache, true, Index, Pos) ->
 		    %% ignore cache for the frame being written to currently
 			undefined;
 		true ->
-			case log_roller_cache:get(Cache, key({Index, Pos})) of
+			case log_roller_cache:get(Cache, key({Cache, Index, Pos})) of
 				undefined -> undefined; %% cache frame does not exist
 				CacheEntry -> 
 					binary_to_term(CacheEntry)
@@ -134,7 +134,7 @@ read_chunk_from_file(#continuation{state=State}=Cont) ->
     State1 = State#cstate{last_timestamp=LTimestamp1, binary_remainder=BinRem1},
     Cont1 = Cont#continuation{state=State1},
 	if  State#cstate.cache =/= undefined ->
-			log_roller_cache:put(State#cstate.cache, key({Index, Pos}), term_to_binary({cache_entry, State1, Terms}));
+			log_roller_cache:put(State#cstate.cache, key({State#cstate.cache, Index, Pos}), term_to_binary({cache_entry, State1, Terms}));
 		true -> ok
 	end,
 	{ok, Cont1, Terms}.
@@ -280,7 +280,7 @@ is_full_cycle({A1,B1,C1}, {A2,B2,C2}) ->
 		true -> false
 	end.
 	
-key({A, B}) when is_integer(A), is_integer(B) -> 
-	lists:flatten(io_lib:format("~w_~w", [A,B]));
+key({Cache, Index, Pos}) when is_list(Cache), is_integer(Index), is_integer(Pos) -> 
+	lists:flatten(io_lib:format("~s_~w_~w", [Cache, Index, Pos]));
 key(_) ->
 	exit({error, unexpected_key}).

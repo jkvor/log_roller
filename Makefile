@@ -30,7 +30,7 @@ install:
 	cp log_roller $(prefix)/etc/init.d/
 
 package: clean
-	@mkdir log_roller-$(VERSION)/ && cp -rf bin ebin include log_roller Makefile priv public README src support t templates log_roller-$(VERSION)
+	@mkdir log_roller-$(VERSION)/ && cp -rf bin ebin include log_roller Makefile priv public README.markdown src support t templates log_roller-$(VERSION)
 	@COPYFILE_DISABLE=true tar zcf log_roller-$(VERSION).tgz log_roller-$(VERSION)
 	@rm -rf log_roller-$(VERSION)/
 	

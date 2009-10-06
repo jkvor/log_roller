@@ -67,7 +67,7 @@ function refresh() {
 			$('log_frame').innerHTML += logs.responseText;
 			$('int_log_frame').innerHTML = '';
 			$('ajax-loader').style.display = 'none';
-            if(logs.responseText.match(/^\s+$/) != null) {
+            if(logs.responseText == '') {
                 $('log_frame').innerHTML = 'no logs met your search criteria';
             }
 		}

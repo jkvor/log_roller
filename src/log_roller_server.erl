@@ -138,12 +138,12 @@ reload() ->
 	log_roller_disk_logger:reload().
 
 build_rel() ->
+	Apps = [kernel,stdlib],
 	{ok, FD} = file:open("bin/log_roller_server.rel", [write]),
 	RelInfo = {release,
 	    {"log_roller_server", "0.3"},
-	    {erts, "5.7.2"}, [
-	        {kernel, "2.13.2"},
-	        {stdlib, "1.16.2"},
+	    get_app_version(erts), 
+            [get_app_version(AppName) || AppName <- Apps] ++ [
 	        {log_roller_server, "0.3"}
 	    ]
 	},
@@ -152,4 +152,14 @@ build_rel() ->
 	systools:make_script("bin/log_roller_server", [local]),
 	ok.
 	
-	
+get_app_version(AppName) ->
+	case code:lib_dir(AppName) of
+		{error, bad_name} ->
+			exit({bad_name, AppName});
+		Dir ->
+			case lists:reverse(string:tokens(Dir, "-")) of
+				[Vsn|_] -> {AppName, Vsn};
+				_ ->
+					exit({failed_to_tokenize, Dir})
+			end
+	end.

@@ -34,6 +34,7 @@
 -export([add_hook/3, remove_hook/2]).
 
 start_link() ->
+	io:format("log_roller_hooks start_link~n"),
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 add_hook(Module, Function, BaseArgs) ->

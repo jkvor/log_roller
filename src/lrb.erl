@@ -45,7 +45,8 @@
 
 %% @spec start_link([disk_logger()]) -> {ok, pid()}
 start_link(DiskLoggers) ->
-	proc_lib:start(?MODULE, start, [self(), DiskLoggers]).
+	io:format("lrb start_link~n"),
+	proc_lib:start(?MODULE, start, [self(), DiskLoggers], 2000).
 
 %% @spec fetch(Continuation, Opts) -> {continuation(), Results}
 %%		 Continuation = atom() | continuation()
@@ -71,7 +72,10 @@ disk_logger_names() ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 start(Parent, DiskLoggers) ->
-	State = [DiskLogger#disk_logger{cache=log_roller_cache:add(DiskLogger#disk_logger.cache_size)} || DiskLogger <- DiskLoggers],
+	State = [begin
+		{ok, CachePid} = log_roller_cache:start_link(DiskLogger#disk_logger.cache_size),
+		DiskLogger#disk_logger{cache=CachePid} 
+	end || DiskLogger <- DiskLoggers],
     global:register_name(log_roller_browser_state, self()),
     proc_lib:init_ack(Parent, {ok, self()}),
     ?MODULE:server_loop(State).

@@ -102,7 +102,9 @@ get_cache_frame(LoggerName, Cache, true, Index, Pos) ->
 		    %% ignore cache for the frame being written to currently
 			undefined;
 		true ->
-			case log_roller_cache:get(Cache, key({Cache, Index, Pos})) of
+			Fuck = key({Cache, Index, Pos}),
+			io:format("get(~p, ~p)~n", [Cache, Fuck]),
+			case log_roller_cache:get(Cache, Fuck) of
 				undefined -> undefined; %% cache frame does not exist
 				CacheEntry -> 
 					binary_to_term(CacheEntry)
@@ -280,7 +282,7 @@ is_full_cycle({A1,B1,C1}, {A2,B2,C2}) ->
 		true -> false
 	end.
 	
-key({Cache, Index, Pos}) when is_list(Cache), is_integer(Index), is_integer(Pos) -> 
-	lists:flatten(io_lib:format("~s_~w_~w", [Cache, Index, Pos]));
+key({Cache, Index, Pos}) when is_pid(Cache), is_integer(Index), is_integer(Pos) -> 
+	lists:flatten(io_lib:format("~p_~w_~w", [Cache, Index, Pos]));
 key(_) ->
 	exit({error, unexpected_key}).

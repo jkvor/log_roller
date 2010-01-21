@@ -35,7 +35,6 @@ start_link(Args) when is_list(Args) ->
 	Port = get_arg_value(port, Args, ?DEFAULT_PORT),
 	DocRoot = get_arg_value(doc_root, Args),
 	Loop = fun (Req) -> ?MODULE:loop(Req, DocRoot) end,
-	io:format("starting web_server ~p ~p ~p~n", [Address, Port, DocRoot]),
 	mochiweb_http:start([{loop, Loop}, {ip, Address}, {port, Port}]).
 
 loop(Req, DocRoot) ->

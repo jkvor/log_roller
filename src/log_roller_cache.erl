@@ -25,39 +25,34 @@
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/0, init/1, handle_call/3, handle_cast/2, 
+-export([start_link/1, init/1, handle_call/3, handle_cast/2, 
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([add/1, get/2, put/3, delete/2, size/1, items/1]).
+-export([get/2, put/3, delete/2, size/1, items/1]).
 
-start_link() ->
-	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(CacheSize) ->
+	gen_server:start_link(?MODULE, CacheSize, []).
 
-%% @spec add(integer()) -> CacheStr::string()
-add(CacheSizeInBytes) ->
-	gen_server:call(?MODULE, {add, CacheSizeInBytes}).
-
-%% @spec get(string()) -> undefined | any()	
-get(CacheStr, Key) when is_list(CacheStr), is_list(Key) ->
-	gen_server:call(?MODULE, {get, CacheStr, Key}).
+get(CachePid, Key) when is_pid(CachePid), is_list(Key) ->
+	Res = gen_server:call(CachePid, {get, Key}),
+	io:format("get -> ~p~n", [Res]),
+	Res.
 	
-%% @spec put(list(), binary()) -> ok
-put(CacheStr, Key, Val) when is_list(CacheStr), is_list(Key), is_binary(Val) ->
-	gen_server:call(?MODULE, {put, CacheStr, Key, Val});
+put(CachePid, Key, Val) when is_pid(CachePid), is_list(Key), is_binary(Val) ->
+	gen_server:call(CachePid, {put, Key, Val});
 	
 put(_, _, _) ->
 	exit({error, cache_value_must_be_binary}).
 
-%% @spec delete(string()) -> ok
-delete(CacheStr, Key) when is_list(CacheStr), is_list(Key) ->
-	gen_server:call(?MODULE, {delete, CacheStr, Key}).
+delete(CachePid, Key) when is_pid(CachePid), is_list(Key) ->
+	gen_server:call(CachePid, {delete, Key}).
 	
-size(CacheStr) when is_list(CacheStr) ->
-	gen_server:call(?MODULE, {size, CacheStr}).
+size(CachePid) when is_pid(CachePid) ->
+	gen_server:call(CachePid, size).
 	
-items(CacheStr) when is_list(CacheStr) ->
-	gen_server:call(?MODULE, {items, CacheStr}).
+items(CachePid) when is_pid(CachePid) ->
+	gen_server:call(CachePid, items).
 	
 %%====================================================================
 %% gen_server callbacks
@@ -71,8 +66,9 @@ items(CacheStr) when is_list(CacheStr) ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init(_) ->
-	{ok, []}.
+init(_CacheSize) ->
+	TableID = ets:new(log_roller_cache, [ordered_set, private]),
+	{ok, TableID}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -83,31 +79,21 @@ init(_) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %% @hidden
-%%--------------------------------------------------------------------
-handle_call({add, CacheSizeInBytes}, _From, State) ->
-	{ok, Cache} = cherly:start(CacheSizeInBytes),
-	CacheStr = cache_to_list(Cache),
-	{reply, CacheStr, [{CacheStr, Cache}|State]};
+%%--------------------------------------------------------------------	
+handle_call({get, Key}, _From, TableID) ->
+	{reply, get_internal(TableID, Key), TableID};
+
+handle_call({put, Key, Val}, _From, TableID) ->
+	{reply, put_internal(TableID, Key, Val), TableID};
+
+handle_call({delete, Key}, _From, TableID) ->
+	{reply, delete_internal(TableID, Key), TableID};
 	
-handle_call({get, CacheStr, Key}, _From, State) ->
-	Cache = proplists:get_value(CacheStr, State),
-	{reply, get_internal(Cache, Key), State};
+handle_call(size, _From, TableID) ->
+	{reply, size_internal(TableID), TableID};
 
-handle_call({put, CacheStr, Key, Val}, _From, State) ->
-	Cache = proplists:get_value(CacheStr, State),
-	{reply, put_internal(Cache, Key, Val), State};
-
-handle_call({delete, CacheStr, Key}, _From, State) ->
-	Cache = proplists:get_value(CacheStr, State),
-	{reply, delete_internal(Cache, Key), State};
-	
-handle_call({size, CacheStr}, _From, State) ->
-	Cache = proplists:get_value(CacheStr, State),
-	{reply, cherly:size(Cache), State};
-
-handle_call({items, CacheStr}, _From, State) ->
-	Cache = proplists:get_value(CacheStr, State),
-	{reply, cherly:items(Cache), State}.
+handle_call(items, _From, TableID) ->
+	{reply, all_items_internal(TableID), TableID}.
 	
 %%--------------------------------------------------------------------
 %% Function: handle_cast(Msg, State) -> {noreply, State} |
@@ -146,31 +132,23 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %%--------------------------------------------------------------------
 %%% Internal functions
-%%--------------------------------------------------------------------
-cache_to_list({cherly, Port}) ->
-	erlang:port_to_list(Port).
-	
-get_internal(Cache, Key) when is_tuple(Cache), is_list(Key) ->
-	case cherly:get(Cache, Key) of
-		not_found -> 
-			undefined;
-		{ok, Value} -> 
-			Value
+%%--------------------------------------------------------------------	
+get_internal(TableID, Key) ->
+	case ets:lookup(TableID, Key) of
+		[] -> undefined;
+		[Val] -> Val
 	end.
 		
-put_internal(Cache, Key, Val) when is_tuple(Cache), is_list(Key), is_binary(Val) ->
-	case cherly:put(Cache, Key, Val) of
-		true ->
-			ok;
-		Err ->
-			io:format("failed to place in cache ~p: ~p~n", [Key, Err]),
-			{error, cache_put_failed}
-	end.
+put_internal(TableID, Key, Val) ->
+	ets:insert(TableID, {Key, Val}),
+	ok.
 
-delete_internal(Cache, Key) when is_tuple(Cache), is_list(Key) ->
-	case cherly:remove(Cache, Key) of
-		true ->
-			ok;
-		_ ->
-			{error, cache_remove_failed}
-	end.
+delete_internal(TableID, Key) ->
+	ets:delete(TableID, Key),
+	ok.
+
+size_internal(TableID) ->
+	ets:info(TableID, size).
+	
+all_items_internal(TableID) ->
+	ets:tab2list(TableID).

@@ -13,6 +13,6 @@
     ]},
     {registered, []},
     {mod, {log_roller_server, []}},
-    {applications, [kernel, stdlib]},
+    {applications, [kernel, stdlib, mochiweb]},
 	{start_phases, [{pg2, []}, {world, []}, {discovery, []}]}
 ]}.

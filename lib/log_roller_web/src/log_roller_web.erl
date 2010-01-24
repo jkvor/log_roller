@@ -20,14 +20,12 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(log_roller).
--author('jacob.vorreuter@gmail.com').
+-module(log_roller_web).
 -behaviour(application).
 
--export([
-	start/0, start/2, stop/1, start_phase/3, queue_length/0,
-	register_subscriber/1, get_registered_subscribers/0
-]).
+-export([start/0, start/2, stop/1, init/1, start_phase/3, compile_templates/0, build_rel/1]).
+
+-include("log_roller.hrl").
 
 %%%
 %%% Application API
@@ -35,48 +33,48 @@
 start() ->
     application:start(?MODULE).
 
-%% @spec start(StartType, StartArgs) -> {ok, Pid}
 %% @doc start the application
 start(_StartType, _StartArgs) -> 
-	ok = error_logger:add_report_handler(log_roller_h),
-	{ok, self()}.
+	supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 	
 %% @doc stop the application
-stop(_) ->
+stop(_) -> 
 	ok.
-
-get_registered_subscribers() ->
-	gen_event:call(error_logger, log_roller_h, subscribers).
 	
-queue_length() ->
-	erlang:process_info(erlang:whereis(error_logger), message_queue_len).
-		
 %%%
 %%% Internal functions
 %%%
-
-%% @hidden
+init(_) ->
+	{ok, {{one_for_one, 10, 10}, [
+		{lr_web_server, {lr_web_server, start_link, [[]]}, permanent, 5000, worker, [lr_web_server]}
+	]}}.
+	
 start_phase(world, _, _) ->
-	(catch net_adm:world()),
+	net_adm:world(),
 	ok;
-
-%% @hidden
-start_phase(discovery, _, _) ->
-	[register_subscriber(Node) || Node <- [node()|nodes()]],
+	
+start_phase(pg2, _, _) ->
+    pg2:which_groups(),
+    ok.
+	
+build_rel(AppVsn) ->
+	Apps = [kernel,stdlib,inets],
+	{ok, FD} = file:open("bin/" ++ atom_to_list(?MODULE) ++ ".rel", [write]),
+	RelInfo = {release,
+	    {atom_to_list(?MODULE), AppVsn},
+	    	log_roller_utils:get_app_version(erts),
+            [log_roller_utils:get_app_version(AppName) || AppName <- Apps] ++ [
+			{mochiweb, "0.2"},
+	        {?MODULE, AppVsn}
+	    ]
+	},
+	io:format(FD, "~p.", [RelInfo]),
+	file:close(FD),
+	systools:make_script("bin/" ++ atom_to_list(?MODULE), [local]),
 	ok.
 	
-%% @spec register_subscriber(Node::node()) -> ok
-%% @doc ping Node to determine if it is a subscriber and register with event handler if it is
-register_subscriber(Node) when is_atom(Node) ->
-	case catch rpc:call(Node, log_roller_disk_logger, ping, [node()]) of
-		List when is_list(List) ->
-			[begin
-				gen_event:call(error_logger, log_roller_h, {subscribe, Pid})
-			 end || {ok, Pid} <- List];
-		{badrpc,{'EXIT',{noproc,{gen_server,call,[log_roller_disk_logger,ping]}}}} ->
-			ok;
-		{error, application_not_running} ->
-			ok;
-		_Err ->
-			ok
-	end.
+compile_templates() ->
+  {ok, Filenames} = file:list_dir("templates"),
+  [erltl:compile("templates/" ++ Filename, [{outdir, "ebin"}, report_errors, report_warnings, nowarn_unused_vars]) 
+    || Filename <- Filenames],
+  ok.

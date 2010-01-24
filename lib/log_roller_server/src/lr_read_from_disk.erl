@@ -21,11 +21,10 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 %%
--module(log_roller_disk_reader).
+-module(lr_read_from_disk).
 -author('jacob.vorreuter@gmail.com').
--compile(export_all).
 
--export([start_continuation/3, invalidate_cache/3, terms/1]).
+-export([start_continuation/2, terms/1]).
 
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
@@ -34,24 +33,16 @@
 %% API
 %%====================================================================
 
-%% @spec start_continuation(atom(), {cherly, post()}, true | false) -> {ok, continuation()}
+%% @spec start_continuation(atom(), true | false) -> {ok, continuation()}
 %% @doc fetch a continuation pointed to the log frame currently being written to
-start_continuation(LoggerName, Cache, UseCache) ->
-	{FileStub, Index, Pos, SizeLimit, MaxIndex} = log_roller_disk_logger:current_location(LoggerName),
+start_continuation(Name, UseCache) ->
+	{FileStub, Index, Pos, SizeLimit, MaxIndex} = lr_write_to_disk:current_location(Name),
 	StartPos = snap_to_grid(Pos),
 	ChunkSize = Pos-StartPos,
-	Props = {cprops, LoggerName, FileStub, ChunkSize, SizeLimit, MaxIndex, UseCache},
-	State = {cstate, Index, StartPos, ?DEFAULT_TIMESTAMP, <<>>, Cache, 0},
+	Props = {cprops, Name, FileStub, ChunkSize, SizeLimit, MaxIndex, UseCache},
+	CachePid = lr_write_to_disk:get_cache_pid(Name),
+	State = {cstate, Index, StartPos, ?DEFAULT_TIMESTAMP, <<>>, CachePid, 0},
 	{continuation, Props, State}.
-
-%% @spec invalidate_cache(atom(), {cherly, port()}, Index) -> ok
-%% @doc remove all cache entries that point to the file ending in Index
-invalidate_cache(_LoggerName, undefined, _Index) -> ok;
-invalidate_cache(LoggerName, Cache, Index) ->
-	Opts = log_roller_disk_logger:options(LoggerName),
-	{SizeLimit, _} = proplists:get_value(size, Opts),
-	Pos = snap_to_grid(SizeLimit),
-	invalidate_cache_frame(Cache, Index, Pos).
 
 %% @spec terms(Cont) -> {ok, Cont1, Terms}
 %%		 Cont = continuation()
@@ -74,19 +65,12 @@ terms(Cont) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-	
-%% lookup cache frames by the key {Index, Pos} and delete
-invalidate_cache_frame(Cache, Index, Pos) when Pos >= 0 ->
-	log_roller_cache:delete(Cache, key({Cache, Index, Pos})),
-	invalidate_cache_frame(Cache, Index, Pos-?MAX_CHUNK_SIZE);
-	
-invalidate_cache_frame(_, _, _) -> ok.
 
 %% @spec read_chunk(Cont) -> {ok, Cont1, Terms}
 %% @doc read a chunk either from cache or file
 %%	def chunk - a block of binary data containing erlang tuples (log_entry records)
 read_chunk(#continuation{properties=Props, state=State}=Cont) ->
-    CacheFrame = get_cache_frame(Props#cprops.disk_logger_name, State#cstate.cache, Props#cprops.use_cache, State#cstate.index, State#cstate.position),
+    CacheFrame = get_cache_frame(Props#cprops.disk_logger_name, State#cstate.cache_pid, Props#cprops.use_cache, State#cstate.index, State#cstate.position),
     case CacheFrame of
         undefined -> read_chunk_from_file(Cont);
         _ -> read_chunk_from_cache(Cont, CacheFrame)
@@ -102,9 +86,7 @@ get_cache_frame(LoggerName, Cache, true, Index, Pos) ->
 		    %% ignore cache for the frame being written to currently
 			undefined;
 		true ->
-			Fuck = key({Cache, Index, Pos}),
-			io:format("get(~p, ~p)~n", [Cache, Fuck]),
-			case log_roller_cache:get(Cache, Fuck) of
+			case lr_cache:get(Cache, key({Cache, Index, Pos})) of
 				undefined -> undefined; %% cache frame does not exist
 				CacheEntry -> 
 					binary_to_term(CacheEntry)
@@ -115,7 +97,7 @@ get_cache_frame(LoggerName, Cache, true, Index, Pos) ->
 %% If {Index,Pos} is inside the frame currently being
 %% written to then return true, otherwise, false
 is_current_location(LoggerName, Index, Pos) ->
-    {_, CurrIndex, CurrPos, _, _} = log_roller_disk_logger:current_location(LoggerName),
+    {_, CurrIndex, CurrPos, _, _} = lr_write_to_disk:current_location(LoggerName),
     if
 		Index == CurrIndex ->
 			A = snap_to_grid(Pos),
@@ -135,8 +117,8 @@ read_chunk_from_file(#continuation{state=State}=Cont) ->
     Pos = State#cstate.position,
     State1 = State#cstate{last_timestamp=LTimestamp1, binary_remainder=BinRem1},
     Cont1 = Cont#continuation{state=State1},
-	if  State#cstate.cache =/= undefined ->
-			log_roller_cache:put(State#cstate.cache, key({State#cstate.cache, Index, Pos}), term_to_binary({cache_entry, State1, Terms}));
+	if State#cstate.cache_pid =/= undefined ->
+			lr_cache:put(State#cstate.cache_pid, key({State#cstate.cache_pid, Index, Pos}), term_to_binary({cache_entry, State1, Terms}));
 		true -> ok
 	end,
 	{ok, Cont1, Terms}.
@@ -151,29 +133,19 @@ read_chunk_from_cache(#continuation{state=State}=Cont, CacheEntry) ->
 read_file(#continuation{properties=Props, state=State}) ->
     %io:format("read from file {~w, ~w}~n", [State#cstate.index, State#cstate.position]),
 	FileName = lists:flatten(io_lib:format("~s.~w", [Props#cprops.file_stub, State#cstate.index])),
-	{ok, IoDevice} = file_handle(State#cstate.cache, FileName),
+	{ok, IoDevice} = file_handle(State#cstate.cache_pid, FileName),
 	case file:pread(IoDevice, State#cstate.position, Props#cprops.chunk_size) of
 		{ok, Chunk} -> 
 			{ok, Chunk};
 		eof ->
 			{ok, []};
 		{error, Reason} -> 
-			io:format("failed reading ~p, ~p, ~p~n", [IoDevice, State#cstate.position, Props#cprops.chunk_size]),
+			%io:format("failed reading ~p, ~p, ~p~n", [IoDevice, State#cstate.position, Props#cprops.chunk_size]),
 			exit({error, Reason})
 	end.
 	
 file_handle(_, FileName) -> open_file(FileName).
-% file_handle(undefined, FileName) -> open_file(FileName);
-% file_handle(Cache, FileName) ->
-% 	case log_roller_cache:get(Cache, FileName) of
-% 		undefined ->
-% 			{ok, IoDevice} = open_file(FileName),
-% 			log_roller_cache:put(Cache, FileName, term_to_binary(IoDevice)),
-% 			{ok, IoDevice};
-% 		IoDevice ->
-% 			{ok, binary_to_term(IoDevice)}
-% 	end.
-	
+
 open_file(FileName) ->
 	case file:open(FileName, [read]) of
 		{ok, IoDevice} -> {ok, IoDevice};

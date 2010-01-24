@@ -41,7 +41,7 @@ application:
 
 	{application, my_app, [
 	    {description, "my_app"},
-	    {vsn, "0.3"},
+	    {vsn, "0.4"},
 	    {modules, []},
 	    {registered, []},
 	    {mod, {my_app, []}},
@@ -72,7 +72,7 @@ erl -name server@`hostname` -boot log_roller_server
 
 	{application, my_app, [
 	    {description, "my_app"},
-	    {vsn, "0.3"},
+	    {vsn, "0.4"},
 	    {modules, []},
 	    {registered, []},
 	    {mod, {my_app, []}},

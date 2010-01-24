@@ -21,7 +21,7 @@
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
 %%
--module(log_roller_disk_logger).
+-module(lr_write_to_disk).
 -author('jacob.vorreuter@gmail.com').
 -behaviour(gen_server).
 
@@ -29,12 +29,11 @@
 -export([start_link/1, init/1, handle_call/3, handle_cast/2, 
 		 handle_info/2, terminate/2, code_change/3]).
 
-%% API exports
--export([sync/1, register_as_subscriber_with/2, ping/1, total_writes/1, current_location/1, options/1, log/1]).
+-export([current_location/1, get_cache_pid/1]).
 
 -include("log_roller.hrl").
 
--record(state, {log, args, disk_logger_name, filters, total_writes}).
+-record(state, {log, args, name, filters, total_writes, cache_pid}).
 
 %%====================================================================
 %% API
@@ -42,45 +41,8 @@
 
 %% @spec start_link() -> {ok,Pid} | ignore | {error,Error}
 %% @doc start the server
-start_link(DiskLogger) when is_record(DiskLogger, disk_logger) ->
-    io:format("start server: ~p~n", [?Server_Name(DiskLogger#disk_logger.name)]),
-    gen_server:start_link({local, ?Server_Name(DiskLogger#disk_logger.name)}, ?MODULE, DiskLogger, []).
-	
-%% @spec sync(LoggerName) -> ok | {error, Reason}
-%%       LoggerName = atom()
-%% @doc call disk_log:sync() and force flush of cache
-sync(LoggerName) when is_atom(LoggerName) ->
-	gen_server:call(?Server_Name(LoggerName), sync, infinity).
-	
-%% @spec register_as_subscriber_with(LoggerName, Node) -> ok
-%%		 LoggerName = atom()
-%%		 Node = node()
-%% @doc send a message to the specified node, registering the gen_server process as a subscriber
-register_as_subscriber_with(LoggerName, Node) when is_atom(LoggerName), is_atom(Node) ->
-	gen_server:call(?Server_Name(LoggerName), {register_as_subscriber_with, Node}).
-
-%% @spec ping(FromNode) -> [{ok, Pid}]
-%%		 FromNode = node()
-%%		 Pid = pid()
-%% @doc respond to ping requests sent from publisher nodes with the gen_server process id
-ping(FromNode) when is_atom(FromNode) ->
-    Subscriptions = log_roller_server:determine_subscriptions(),
-    lists:foldl(
-        fun ({Logger, []}, Acc) ->
-                [gen_server:call(?Server_Name(Logger#disk_logger.name), ping)|Acc];
-            ({Logger, Nodes}, Acc) ->
-	            case lists:member(FromNode, Nodes) of
-					true ->
-						[gen_server:call(?Server_Name(Logger#disk_logger.name), ping)|Acc];
-					false ->
-						Acc
-				end
-	    end, [], Subscriptions).
-	
-%% @spec total_writes(LoggerName) -> integer()
-%%       LoggerName = atom()
-total_writes(LoggerName) when is_atom(LoggerName) ->
-	gen_server:call(?Server_Name(LoggerName), total_writes).
+start_link(LogConfig) when is_record(LogConfig, log_config) ->
+    gen_server:start_link({local, LogConfig#log_config.name}, ?MODULE, LogConfig, []).
 
 %% @spec current_location(LoggerName) -> Result
 %%       LoggerName = atom()
@@ -97,24 +59,11 @@ total_writes(LoggerName) when is_atom(LoggerName) ->
 %% insert.  SizeLimit and MaxIndex are the config values that
 %% dictate how large log files can become and how many files
 %% to distribute the logs amongst.
-current_location(LoggerName) when is_atom(LoggerName) ->
-	gen_server:call(?Server_Name(LoggerName), current_location).
+current_location(Name) when is_atom(Name) ->
+	gen_server:call(Name, current_location).
 	
-%% @spec options(LoggerName) -> Result
-%%       LoggerName = atom()
-%%       Result = [
-%%          {name, DiskLoggerName::atom()},
-%%          {file, LogFile::string()},
-%%          {type, wrap},
-%%          {format, external},
-%%          {head, none},
-%%          {notify, true},
-%%          {size, {MaxBytes::integer(), MaxFiles::integer()}}]
-options(LoggerName) when is_atom(LoggerName) ->
-	gen_server:call(?Server_Name(LoggerName), options).
-
-log(LoggerName) when is_atom(LoggerName) ->
-	gen_server:call(?Server_Name(LoggerName), log).
+get_cache_pid(Name) when is_atom(Name) ->
+	gen_server:call(Name, cache_pid).
 	
 %%====================================================================
 %% gen_server callbacks
@@ -128,8 +77,10 @@ log(LoggerName) when is_atom(LoggerName) ->
 %% Description: Initiates the server
 %% @hidden
 %%--------------------------------------------------------------------
-init(DiskLogger) when is_record(DiskLogger, disk_logger) ->
-	State = initialize_state(DiskLogger),
+init(LogConfig) when is_record(LogConfig, log_config) ->
+	State = initialize_state(LogConfig),
+	pg2:create(log_roller_server),
+	pg2:join(log_roller_server, self()),
 	{ok, State}.
 
 %%--------------------------------------------------------------------
@@ -141,20 +92,7 @@ init(DiskLogger) when is_record(DiskLogger, disk_logger) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %% @hidden
-%%--------------------------------------------------------------------
-handle_call(sync, _From, #state{log=Log}=State) ->	
-	{reply, disk_log:sync(Log), State};
-	
-handle_call({register_as_subscriber_with, Node}, _From, State) ->
-	Res = gen_event:call({error_logger, Node}, log_roller_h, {subscribe, self()}),
-	{reply, Res, State};
-
-handle_call(ping, _From, State) ->
-	{reply, {ok, self()}, State};
-
-handle_call(total_writes, _From, State) ->
-	{reply, State#state.total_writes, State};	
-	
+%%--------------------------------------------------------------------	
 handle_call(current_location, _From, #state{log=Log, args=Args}=State) ->
 	Infos = disk_log:info(Log),
 	FileStub = proplists:get_value(file, Args),
@@ -163,12 +101,12 @@ handle_call(current_location, _From, #state{log=Log, args=Args}=State) ->
 	{SizeLimit, MaxIndex} = proplists:get_value(size, Args),
 	{reply, {FileStub, Index, Pos, SizeLimit, MaxIndex}, State};
 	
-handle_call(options, _From, #state{args=Args}=State) ->
-	{reply, Args, State};
-		
-handle_call(log, _From, #state{log=Log}=State) ->
-	{reply, Log, State};
+handle_call(cache_pid, _From, #state{cache_pid=CachePid}=State) ->
+	{reply, CachePid, State};
 	
+handle_call(name, _From, #state{name=Name}=State) ->
+	{reply, Name, State};
+
 handle_call(_, _From, State) -> {reply, {error, invalid_call}, State}.
 	
 %%--------------------------------------------------------------------
@@ -187,9 +125,9 @@ handle_cast(_Message, State) -> {noreply, State}.
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, total_writes=Writes}=State) ->
+handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, total_writes=Writes, cache_pid=CachePid}=State) ->
 	State1 =
-		case log_roller_filter:filter(LogEntry, Filters) of
+		case lr_filter:filter(LogEntry, Filters) of
 			[] ->
 				State;
 			[_] ->
@@ -197,18 +135,17 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, to
 				LogSize = size(BinLog),
 				Bin = <<?Bin_Term_Start/binary, LogSize:16, BinLog:LogSize/binary, ?Bin_Term_Stop/binary>>,
 				disk_log:blog(Log, Bin),
-				gen_server:abcast(log_roller_hooks, {log, Log, LogEntry}),
 				State#state{total_writes=Writes+1}			
 		end,
 	{noreply, State1};
 
-handle_info({_,_,_,{wrap,_NumLostItems}}, #state{log=_Log, disk_logger_name=_Name}=State) ->
-	%Infos = disk_log:info(Log),
-	%Index = proplists:get_value(current_file, Infos),
-	%spawn(fun() -> lrb:set_current_file(Name, Index) end),
+handle_info({_,_,_,{wrap,_NumLostItems}}, #state{cache_pid=CachePid}=State) ->
+	% CurrentFile = proplists:get_value(current_file, disk_log:info(Log)),
+	% lr_cache:set_page(CachePid, CurrentFile),
 	{noreply, State};
-	
-handle_info(_Info, State) -> io:format("info: ~p~n", [_Info]), {noreply, State}.
+		
+handle_info(_Info, State) -> 
+	{noreply, State}.
 
 %%--------------------------------------------------------------------
 %% Function: terminate(Reason, State) -> void()
@@ -219,7 +156,6 @@ handle_info(_Info, State) -> io:format("info: ~p~n", [_Info]), {noreply, State}.
 %% @hidden
 %%--------------------------------------------------------------------
 terminate(_Reason, #state{log=Log}) -> 
-	io:format("closing log~n"),
 	disk_log:close(Log).
 
 %%--------------------------------------------------------------------
@@ -233,27 +169,28 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%% Internal functions
 %%--------------------------------------------------------------------
 		
-initialize_state(DiskLogger) when is_record(DiskLogger, disk_logger) ->
-	LogFile = log_file(DiskLogger),
+initialize_state(LogConfig) when is_record(LogConfig, log_config) ->
+	LogFile = log_file(LogConfig#log_config.name, LogConfig#log_config.log_dir),
 	Args = [
-		{name, DiskLogger#disk_logger.name},
+		{name, LogConfig#log_config.name},
 		{file, LogFile},
 		{type, wrap},
 		{format, external},
 		{head, none},
 		{notify, true},
-		{size, {DiskLogger#disk_logger.maxbytes, DiskLogger#disk_logger.maxfiles}}
+		{size, {LogConfig#log_config.maxbytes, LogConfig#log_config.maxfiles}}
 	],
 	{ok, Log, Args1} = open_log(Args),
 	#state{
 		log=Log, 
 		args=Args1, 
-		disk_logger_name=DiskLogger#disk_logger.name,
-		filters=DiskLogger#disk_logger.filters, 
+		name=LogConfig#log_config.name,
+		cache_pid=lr_cache:new(LogConfig#log_config.cache_size),
+		filters=LogConfig#log_config.filters, 
 		total_writes=0
 	}.
 
-log_file(#disk_logger{name=Name, log_dir=Dir}) ->
+log_file(Name, Dir) when is_atom(Name) ->
 	case Dir of
 		undefined -> atom_to_list(Name);
 		_ -> 
@@ -264,8 +201,8 @@ log_file(#disk_logger{name=Name, log_dir=Dir}) ->
 					case file:make_dir(Dir) of
 						ok -> 
 							Dir ++ "/" ++ atom_to_list(Name);
-						DirErr ->
-							io:format("failed to create directory ~p: ~p~n", [Dir, DirErr]),
+						_DirErr ->
+							%io:format("failed to create directory ~p: ~p~n", [Dir, DirErr]),
 							atom_to_list(Name)
 					end
 			end

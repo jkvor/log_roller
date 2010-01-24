@@ -20,9 +20,8 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(log_roller_web_server).
--compile(export_all).
-%-export([start_link/1]).
+-module(lr_web_server).
+-export([start_link/1, loop/2]).
 
 -include("log_roller.hrl").
 
@@ -46,13 +45,7 @@ loop(Req, DocRoot) ->
 		Response ->
 			Response
 	end.
-		
-handle(['GET', "tail"], Req, _DocRoot) ->
-    tail_logs(Req:parse_qs(), Req);
-    
-handle(['POST', "tail"], Req, _DocRoot) ->
-    tail_logs(Req:parse_qs(), Req);
-        
+		        
 handle(['GET'], Req, DocRoot) ->
 	Req:serve_file("logs.html", DocRoot);
 	
@@ -79,18 +72,6 @@ handle(['GET', "nodes", Server], Req, _DocRoot) ->
 	Req:respond({200, [?CONTENT_TYPE], NodeOptions});
 	
 handle(_, _, _) -> no_match.
-	
-tail_logs(Params, Req) ->
-    Dict = opts(Params, dict:new()),
-    ServerName =
-		case dict:find(server, Dict) of
-			{ok, Value} -> Value;
-			error -> default_server()
-		end,
-    Response = Req:respond({200, [{"Transfer-Encoding", "chunked"}, {"Content-Type", "text/html"}], chunked}),
-    log_roller_tail:add_response(ServerName, dict:to_list(Dict), Response),
-    receive x -> x end,
-    Response:write_chunk("").
 		
 serve_logs(Params, Req) ->
 	io:format("params: ~p~n", [Params]),
@@ -147,10 +128,11 @@ do_write_chunk(Resp, Logs) ->
     Resp:write_chunk(Content).
 
 default_server() ->
-	lists:nth(1, lrb:disk_logger_names()).
+	gen_server:call(hd(pg2:get_members(log_roller_server)), name, 5000).
 	
 tab_content(ServerName) ->
-	lr_tabs:render({data, ServerName, lrb:disk_logger_names()}).
+	Names = [gen_server:call(Pid, name, 5000) || Pid <- pg2:get_members(log_roller_server)],
+	lr_tabs:render({data, ServerName, Names}).
 
 opts([], Dict) -> 
 	Dict;
@@ -170,7 +152,7 @@ opts([{Key,Val}|Tail], Dict) ->
 get_arg_value(Key, Args, Default) ->
 	case proplists:get_value(Key, Args) of
 		undefined -> 
-			case application:get_env(log_roller_server, Key) of
+			case application:get_env(log_roller_web, Key) of
 				{ok, Val} -> Val;
 				undefined -> Default
 			end;
@@ -180,7 +162,7 @@ get_arg_value(Key, Args, Default) ->
 get_arg_value(doc_root, Args) ->
     case proplists:get_value(doc_root, Args) of
 		undefined -> 
-			case application:get_env(log_roller_server, doc_root) of
+			case application:get_env(log_roller_web, doc_root) of
 				{ok, Val} -> Val;
 				undefined ->
 				    case code:lib_dir(log_roller) of
@@ -213,18 +195,4 @@ dict_val(nodes, Val) -> [list_to_atom(Val)];
 dict_val(grep, Val) -> Val.
 
 get_nodes(Server) ->
-    ActiveNodes = [node()|nodes()],
-	Nodes1 = 
-		case lists:filter(fun(#disk_logger{name=Name}) -> Name == Server end, lrb:disk_loggers()) of
-			[#disk_logger{filters=Filters}] ->
-				case proplists:get_value(nodes, Filters) of
-					undefined ->
-						ActiveNodes;
-					Nodes ->
-						Nodes
-				end;
-			_ -> 
-				ActiveNodes
-		end,
-	lists:sort(Nodes1).
-	
+	lists:sort([node()|nodes()]).

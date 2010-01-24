@@ -20,25 +20,24 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
--module(log_roller_cache).
+-module(lr_cache).
 -author('jacob.vorreuter@gmail.com').
 -behaviour(gen_server).
 
 %% gen_server callbacks
--export([start_link/1, init/1, handle_call/3, handle_cast/2, 
+-export([init/1, handle_call/3, handle_cast/2, 
 		 handle_info/2, terminate/2, code_change/3]).
 
 %% API exports
--export([get/2, put/3, delete/2, size/1, items/1]).
+-export([new/1, get/2, put/3, delete/2, size/1, items/1]).
 
-start_link(CacheSize) ->
-	gen_server:start_link(?MODULE, CacheSize, []).
-
-get(CachePid, Key) when is_pid(CachePid), is_list(Key) ->
-	Res = gen_server:call(CachePid, {get, Key}),
-	io:format("get -> ~p~n", [Res]),
-	Res.
+new(CacheSize) ->
+	{ok, Pid} = gen_server:start_link(?MODULE, CacheSize, []),
+	Pid.
 	
+get(CachePid, Key) when is_pid(CachePid), is_list(Key) ->
+	gen_server:call(CachePid, {get, Key}).
+		
 put(CachePid, Key, Val) when is_pid(CachePid), is_list(Key), is_binary(Val) ->
 	gen_server:call(CachePid, {put, Key, Val});
 	
@@ -67,7 +66,7 @@ items(CachePid) when is_pid(CachePid) ->
 %% @hidden
 %%--------------------------------------------------------------------
 init(_CacheSize) ->
-	TableID = ets:new(log_roller_cache, [ordered_set, private]),
+	TableID = ets:new(lr_cache, [ordered_set, private]),
 	{ok, TableID}.
 
 %%--------------------------------------------------------------------
@@ -136,7 +135,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 get_internal(TableID, Key) ->
 	case ets:lookup(TableID, Key) of
 		[] -> undefined;
-		[Val] -> Val
+		[{Key,Val}] -> Val
 	end.
 		
 put_internal(TableID, Key, Val) ->

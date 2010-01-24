@@ -34,8 +34,6 @@
 -export([init/1, handle_event/2, handle_call/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("log_roller.hrl").
-
--record(state, {listening_pids}).
 	
 %%%----------------------------------------------------------------------
 %%% Callback functions from gen_event
@@ -48,7 +46,7 @@
 %% @hidden
 %%----------------------------------------------------------------------
 init(_) ->	
-	{ok, #state{listening_pids=[]}}.
+	{ok, []}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_event/2
@@ -58,40 +56,31 @@ init(_) ->
 %% @hidden                       
 %%----------------------------------------------------------------------
 handle_event({error, _Gleader, {Pid, Format, Data}}, State) when is_pid(Pid) ->
-	{ok, State1} = commit(State, #log_entry{type=error, node=get_node(Pid), time=erlang:now(), message=msg(Format, Data)}),
-	{ok, State1};
+	commit(State, #log_entry{type=error, node=get_node(Pid), time=erlang:now(), message=msg(Format, Data)});
 	
 handle_event({error_report, _Gleader, {Pid, std_error, Report}}, State) when is_pid(Pid) ->
-	{ok, State1} = commit(State, #log_entry{type=error, node=get_node(Pid), time=erlang:now(), message=Report}),
-	{ok, State1};
+	commit(State, #log_entry{type=error, node=get_node(Pid), time=erlang:now(), message=Report});
 	
 handle_event({error_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid), is_atom(Type) ->
-	{ok, State1} = commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report}),
-	{ok, State1};
+	commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report});
 	
 handle_event({warning_msg, _Gleader, {Pid, Format, Data}}, State) when is_pid(Pid) ->
-	{ok, State1} = commit(State, #log_entry{type=warning, node=get_node(Pid), time=erlang:now(), message=msg(Format, Data)}),
-	{ok, State1};
+	commit(State, #log_entry{type=warning, node=get_node(Pid), time=erlang:now(), message=msg(Format, Data)});
 		
 handle_event({warning_report, _Gleader, {Pid, std_warning, Report}}, State) when is_pid(Pid) ->
-	{ok, State1} = commit(State, #log_entry{type=warning, node=get_node(Pid), time=erlang:now(), message=Report}),
-	{ok, State1};
+	commit(State, #log_entry{type=warning, node=get_node(Pid), time=erlang:now(), message=Report});
 		
 handle_event({warning_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid), is_atom(Type) ->
-	{ok, State1} = commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report}),
-	{ok, State1};
+	commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report});
 		
 handle_event({info_msg, _Gleader, {Pid, Format, Data}}, State) when is_pid(Pid) ->
-	{ok, State1} = commit(State, #log_entry{type=info, node=get_node(Pid), time=erlang:now(), message=msg(Format, Data)}),
-	{ok, State1};
+	commit(State, #log_entry{type=info, node=get_node(Pid), time=erlang:now(), message=msg(Format, Data)});
 		
 handle_event({info_report, _Gleader, {Pid, std_info, Report}}, State) when is_pid(Pid) ->
-	{ok, State1} = commit(State, #log_entry{type=info, node=get_node(Pid), time=erlang:now(), message=Report}),
-	{ok, State1};
+	commit(State, #log_entry{type=info, node=get_node(Pid), time=erlang:now(), message=Report});
 		
 handle_event({info_report, _Gleader, {Pid, Type, Report}}, State) when is_pid(Pid), is_atom(Type) ->
-	{ok, State1} = commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report}),
-	{ok, State1};
+	commit(State, #log_entry{type=package(Type), node=get_node(Pid), time=erlang:now(), message=Report});
 
 handle_event(_, State) ->
     {ok, State}.
@@ -102,22 +91,7 @@ handle_event(_, State) ->
 %%          {swap_handler, Reply, Args1, State1, Mod2, Args2} |
 %%          {remove_handler, Reply}         
 %% @hidden                   
-%%----------------------------------------------------------------------
-handle_call({subscribe, Pid0}, State) when is_pid(Pid0) ->
-	Pid = pid_to_list(Pid0),
-	Pids = State#state.listening_pids,
-	State1 =
-		case lists:member(Pid, Pids) of
-			false ->
-				State#state{listening_pids=[Pid|Pids]};
-			true ->
-				State
-		end,
-	{ok, ok, State1};
-	
-handle_call(subscribers, State) ->
-	{ok, State#state.listening_pids, State};
-	
+%%----------------------------------------------------------------------	
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
@@ -163,20 +137,13 @@ get_node(Other) ->
 	end.
 	
 commit(State, Log) ->
-	Pids = broadcast(Log, State#state.listening_pids),
-	{ok, State#state{listening_pids=Pids}}.
-
-broadcast(Log, Pids) when is_list(Pids) ->
-    lists:foldl(
-        fun(Pid, Acc) ->
-            case (catch list_to_pid(Pid)) of
-        	    RealPid when is_pid(RealPid) ->
-        	        RealPid ! {log_roller, self(), Log},
-        	        [Pid|Acc];
-        	    _ ->
-        	        Acc
-        	end
-        end, [], Pids).
+	case pg2:get_members(log_roller_server) of
+		{error, _Reason} ->
+			{ok, State};
+		Pids ->
+			[Pid ! {log_roller, self(), Log} || Pid <- Pids],
+			{ok, State}
+	end.
 
 msg(Format, Args) ->
 	case (catch lists:flatten(io_lib:format(Format, Args))) of

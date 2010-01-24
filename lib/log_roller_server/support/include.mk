@@ -3,8 +3,8 @@
 ERL := erl
 ERLC := $(ERL)c
 
-INCLUDE_DIRS := ../include
-EBIN_DIRS := $(wildcard ../ebin)
+INCLUDE_DIRS := ../include ../../log_roller/include
+EBIN_DIRS := $(wildcard ../ebin) ../../log_roller/ebin
 ERLC_FLAGS := -W $(INCLUDE_DIRS:../%=-I ../%) $(EBIN_DIRS:%=-pa %)
 
 ifndef no_debug_info

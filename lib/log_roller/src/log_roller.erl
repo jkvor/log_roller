@@ -20,21 +20,53 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
-%%
-%% @doc Browse log files collected by a log_roller subscriber node.
-%% log roller browser is a gen_server that is started by the log_roller 
-%% application when the "-log_roller_type subscriber" argument is given 
-%% in the shell.
--module(log_roller_utils).
+-module(log_roller).
 -author('jacob.vorreuter@gmail.com').
--compile(export_all).
+-behaviour(application).
 
--include("log_roller.hrl").
+-export([
+	start/0, start/2, stop/1, start_phase/3, queue_length/0, build_rel/1
+]).
 
-format_log_entry(LogEntry) ->
-    [format_time(LogEntry#log_entry.time), LogEntry#log_entry.type, LogEntry#log_entry.node, LogEntry#log_entry.message].
-    
-format_time({Mega,Secs,Micro}) ->
-	{{Y,Mo,D},{H,Mi,S}} = calendar:now_to_local_time({Mega,Secs,Micro}),
-	lists:flatten(io_lib:format("~w-~2.2.0w-~2.2.0w ~2.2.0w:~2.2.0w:~2.2.0w:~w", [Y,Mo,D,H,Mi,S,Micro])).	
-    
+%%%
+%%% Application API
+%%%
+start() ->
+    application:start(?MODULE).
+
+%% @spec start(StartType, StartArgs) -> {ok, Pid}
+%% @doc start the application
+start(_StartType, _StartArgs) -> 
+	ok = error_logger:add_report_handler(log_roller_h),
+	{ok, self()}.
+	
+%% @doc stop the application
+stop(_) ->
+	ok.
+	
+queue_length() ->
+	erlang:process_info(erlang:whereis(error_logger), message_queue_len).
+		
+%%%
+%%% Internal functions
+%%%
+
+%% @hidden
+start_phase(world, _, _) ->
+	(catch net_adm:world()),
+	ok.
+
+build_rel(AppVsn) ->
+	Apps = [kernel,stdlib],
+	{ok, FD} = file:open("bin/" ++ atom_to_list(?MODULE) ++ ".rel", [write]),
+	RelInfo = {release,
+	    {atom_to_list(?MODULE), AppVsn},
+	    	log_roller_utils:get_app_version(erts),
+            [log_roller_utils:get_app_version(AppName) || AppName <- Apps] ++ [
+	        {?MODULE, AppVsn}
+	    ]
+	},
+	io:format(FD, "~p.", [RelInfo]),
+	file:close(FD),
+	systools:make_script("bin/" ++ atom_to_list(?MODULE), [local]),
+	ok.

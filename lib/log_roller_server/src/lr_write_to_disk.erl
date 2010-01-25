@@ -125,7 +125,7 @@ handle_cast(_Message, State) -> {noreply, State}.
 %% Description: Handling all non call/cast messages
 %% @hidden
 %%--------------------------------------------------------------------
-handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, total_writes=Writes, cache_pid=CachePid}=State) ->
+handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, total_writes=Writes}=State) ->
 	State1 =
 		case lr_filter:filter(LogEntry, Filters) of
 			[] ->
@@ -139,7 +139,7 @@ handle_info({log_roller, _Sender, LogEntry}, #state{log=Log, filters=Filters, to
 		end,
 	{noreply, State1};
 
-handle_info({_,_,_,{wrap,_NumLostItems}}, #state{cache_pid=CachePid}=State) ->
+handle_info({_,_,_,{wrap,_NumLostItems}}, State) ->
 	% CurrentFile = proplists:get_value(current_file, disk_log:info(Log)),
 	% lr_cache:set_page(CachePid, CurrentFile),
 	{noreply, State};

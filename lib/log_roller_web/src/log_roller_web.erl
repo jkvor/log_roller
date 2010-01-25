@@ -65,6 +65,7 @@ build_rel(AppVsn) ->
 	    	log_roller_utils:get_app_version(erts),
             [log_roller_utils:get_app_version(AppName) || AppName <- Apps] ++ [
 			{mochiweb, "0.2"},
+			{log_roller_server, AppVsn},
 	        {?MODULE, AppVsn}
 	    ]
 	},

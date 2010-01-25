@@ -17,3 +17,11 @@ rel: compile
 
 clean:
 	rm -rf ebin/*.beam ebin/*.app doc/*.html doc/*.png doc/*-info doc/*.css bin/*.boot bin/*.rel bin/*.script Mnesia* erl_crash.dump *.tgz *.1 *.idx *.siz tmp
+
+install:
+	mkdir -p $(prefix)/$(LIBDIR)/log_roller_server-$(VERSION)/ebin
+	mkdir -p $(prefix)/$(ROOTDIR)/bin
+	for i in ebin/*.beam ebin/*.app; do install $$i $(prefix)/$(LIBDIR)/log_roller_server-$(VERSION)/$$i ; done
+	cp bin/*.boot $(prefix)/$(ROOTDIR)/bin/
+	@mkdir -p $(prefix)/etc/init.d
+	cp log_roller $(prefix)/etc/init.d/

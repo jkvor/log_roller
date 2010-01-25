@@ -25,6 +25,7 @@
 -author('jacob.vorreuter@gmail.com').
 
 -export([start_continuation/2, terms/1]).
+-compile(export_all).
 
 -include_lib("kernel/include/file.hrl").
 -include("log_roller.hrl").
@@ -55,9 +56,9 @@ terms(Cont) ->
 	%% while traveling backward through the log files. If the timestamp
 	%% jumps foreward that means all log files have been traversed.
 	case is_full_cycle(Timestamp1, Timestamp2) of
-		true ->
+		true when length(Terms) > 0 ->
 			exit({error, read_full_cycle});
-		false ->
+		_ ->
 			{ok, Cont2} = rewind_location(Cont1),
 			{ok, Cont2, Terms}
 	end.
@@ -112,7 +113,7 @@ read_chunk_from_file(#continuation{state=State}=Cont) ->
 	BinChunk = list_to_binary(Chunk),
 	BinRem = State#cstate.binary_remainder,
 	Bin = <<BinChunk/binary, BinRem/binary>>,
-	{ok, Terms, BinRem1, LTimestamp1} = parse_terms(Bin, <<>>, [], ?DEFAULT_TIMESTAMP),
+	{ok, Terms, BinRem1, LTimestamp1} = parse_terms(Bin, <<>>, [], State#cstate.last_timestamp),
     Index = State#cstate.index,
     Pos = State#cstate.position,
     State1 = State#cstate{last_timestamp=LTimestamp1, binary_remainder=BinRem1},
@@ -184,7 +185,7 @@ rewind_location(#continuation{properties=Props, state=State}=Cont) ->
 			{ok, Cont#continuation{properties=Props1, state=State1}};
 		true -> %% more than a chunk's worth left
 			Pos1 = snap_to_grid(Pos - ?MAX_CHUNK_SIZE),
-			Props1 = Props#cprops{chunk_size=(Pos-Pos1)},
+			Props1 = Props#cprops{chunk_size=?MAX_CHUNK_SIZE},
 			State1 = State#cstate{position=Pos1},
 			{ok, Cont#continuation{properties=Props1, state=State1}}
 	end.	

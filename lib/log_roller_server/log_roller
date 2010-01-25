@@ -9,7 +9,7 @@ ARG3=${5}
 HOSTNAME=`case \`uname\` in Darwin ) echo \`hostname\`;; * ) echo \`hostname --fqdn\`;; esac`
 
 get_root() {
-	echo `erl -eval 'io:format("~s~n", [case code:lib_dir("log_roller") of {error,_} -> ""; S -> S end])' -s init stop -noshell`
+	echo `erl -eval 'io:format("~s~n", [case code:lib_dir("log_roller_server") of {error,_} -> ""; S -> S end])' -s init stop -noshell`
 }
 
 get_sasl() {
@@ -17,15 +17,15 @@ get_sasl() {
 }
 
 dev_server() {
-	erl -pa ebin -name log_roller@`hostname` +W w +A 1 -config priv/dev -boot bin/log_roller_server
+	erl -pa ebin -name log_roller@`hostname` +W w +A 1 -config priv/dev -boot log_roller_web
 }
 
 console_server() {
-	erl -name log_roller@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_server $(get_sasl)
+	erl -name log_roller@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_web $(get_sasl)
 }
 
 start_server() {
-	erl -detached -name log_roller@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_server -noshell $(get_sasl)
+	erl -detached -name log_roller@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_web -noshell $(get_sasl)
 }
 
 dev(){

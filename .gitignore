@@ -1,6 +1,14 @@
 .DS_Store
 .gitignore~
-ebin/*.beam
+lib/log_roller/ebin/*.beam
+lib/log_roller_server/ebin/*.beam
+lib/log_roller_web/ebin/*.beam
+lib/log_roller/ebin/*.app
+lib/log_roller_server/ebin/*.app
+lib/log_roller_web/ebin/*.app
+lib/log_roller/bin/*
+lib/log_roller_server/bin/*
+lib/log_roller_web/bin/*
 log_roller.script
 log_roller.boot
 log_roller.rel

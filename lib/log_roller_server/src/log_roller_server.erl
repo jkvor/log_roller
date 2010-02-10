@@ -51,7 +51,9 @@ init(_) ->
 	Logs = lr_config:get_log_configs(),
 	{ok, {{one_for_one, 10, 10}, [
 			{erlang:make_ref(), {lr_write_to_disk, start_link, [LogConfig]}, permanent, 5000, worker, [lr_write_to_disk]}
-		 || LogConfig <- Logs]
+		 || LogConfig <- Logs] ++ [
+		    {lr_hooks, {lr_hooks, start_link, []}, permanent, 5000, worker, [lr_hooks]}
+		 ]
 	}}.
 	
 start_phase(world, _, _) ->

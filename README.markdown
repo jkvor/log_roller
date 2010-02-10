@@ -20,12 +20,6 @@ will attempt to connect. Make sure to have matching ~/.erlang.cookie
 files hosted on the servers running log_roller and log_roller_server. 
 The nodes will not be able to see each other otherwise.
 
-## Dependencies
-
-<http://judy.sourceforge.net>
-
-<http://github.com/cliffmoon/cherly>
-
 ## Installation
 Either clone the repository github.com/JacobVorreuter/log_roller
 or download the tarball from jacobvorreuter.github.com/log_roller
@@ -86,8 +80,8 @@ log_roller_server:start()
 ## CONFIGURATION
 There is a config file, "log_roller.config" located in the priv 
 directory.  This will be installed to the priv directory in the
-log_roller lib directory inside your otp root directory. For
-instance: /usr/lib/erlang/lib/log_roller-0.3/priv/log_roller.config.
+log_roller_server lib directory inside your otp root directory. For
+instance: /usr/lib/erlang/lib/log_roller_server-0.3/priv/log_roller.config.
 This contains the path to the log directory as well as max file size
 and number of rotating log files.
 
@@ -102,33 +96,35 @@ __Simple Example__
 __Filtering to Multiple Buckets__
 
 	[{log_roller_server, [
-		{first, [
-			{cache_size, 65536},
-			{maxbytes, 10485760},
-			{maxfiles, 10},
-			{filters, [
-				{nodes, ['foo@MyDogJesusMac.local', 'ack@MyDogJesusMac.local']}
+		{logs, [
+			{first, [
+				{cache_size, 65536},
+				{maxbytes, 10485760},
+				{maxfiles, 10},
+				{filters, [
+					{nodes, ['foo@MyDogJesusMac.local', 'ack@MyDogJesusMac.local']}
+				]}
+			]},
+			{second, [
+				{cache_size, 65536},
+				{maxbytes, 10485760},
+				{maxfiles, 10},
+				{filters, [
+					{nodes, ['bar@MyDogJesusMac.local']},
+					{types, [error, warning]}
+				]}
+			]},
+			{third, [
+				{cache_size, 65536},
+				{maxbytes, 10485760},
+				{maxfiles, 10},
+				{filters, [
+					{nodes, ['baz@MyDogJesusMac.local']},
+					{type, [progress, info]},
+					{grep, "log_roller"}
+				]}
 			]}
-		]},
-		{second, [
-			{cache_size, 65536},
-			{maxbytes, 10485760},
-			{maxfiles, 10},
-			{filters, [
-				{nodes, ['bar@MyDogJesusMac.local']},
-				{types, [error, warning]}
-			]}
-		]},
-		{third, [
-			{cache_size, 65536},
-			{maxbytes, 10485760},
-			{maxfiles, 10},
-			{filters, [
-				{nodes, ['baz@MyDogJesusMac.local']},
-				{type, [progress, info]},
-				{grep, "log_roller"}
-			]}
-		]},			
+		]}		
 	]}].
 
 ## LICENSE

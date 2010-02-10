@@ -73,6 +73,12 @@ handle(['GET', "nodes", Server], Req, _DocRoot) ->
 	NodeOptions = lr_nodes:render({data, get_nodes(list_to_atom(Server)), [node()|nodes()]}),
 	Req:respond({200, [?CONTENT_TYPE], NodeOptions});
 	
+handle(['GET', "tail"], Req, _DocRoot) ->
+    tail_logs(Req:parse_qs(), Req);
+
+handle(['POST', "tail"], Req, _DocRoot) ->
+    tail_logs(Req:parse_qs(), Req);
+	
 handle(_, _, _) -> no_match.
 		
 serve_logs(Params, Req) ->
@@ -123,6 +129,18 @@ fetch_logs(Resp, Cont, Opts, Max) ->
 			do_write_chunk(Resp, Logs)
 	end.
 
+tail_logs(Params, Req) ->
+    Dict = opts(Params, dict:new()),
+    ServerName =
+		case dict:find(server, Dict) of
+			{ok, Value} -> Value;
+			error -> default_server()
+		end,
+    Response = Req:respond({200, [{"Transfer-Encoding", "chunked"}, {"Content-Type", "text/html"}], chunked}),
+    lr_tail:add_response(ServerName, dict:to_list(Dict), Response),
+    receive x -> x end,
+    Response:write_chunk("").
+
 do_write_chunk(_, []) -> ok;
 
 do_write_chunk(Resp, Logs) ->
@@ -167,7 +185,7 @@ get_arg_value(doc_root, Args) ->
 			case application:get_env(log_roller_web, doc_root) of
 				{ok, Val} -> Val;
 				undefined ->
-				    case code:lib_dir(log_roller) of
+				    case code:lib_dir(log_roller_web) of
                         {error, bad_name} -> 
                             {ok, Dir} = file:get_cwd(), 
                             Dir ++ "/public";

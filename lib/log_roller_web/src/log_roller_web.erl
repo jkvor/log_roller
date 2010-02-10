@@ -46,7 +46,8 @@ stop(_) ->
 %%%
 init(_) ->
 	{ok, {{one_for_one, 10, 10}, [
-		{lr_web_server, {lr_web_server, start_link, [[]]}, permanent, 5000, worker, [lr_web_server]}
+		{lr_web_server, {lr_web_server, start_link, [[]]}, permanent, 5000, worker, [lr_web_server]},
+		{lr_tail, {lr_tail, start_link, []}, permanent, 5000, worker, [lr_tail]}
 	]}}.
 	
 start_phase(world, _, _) ->
@@ -64,7 +65,7 @@ build_rel(AppVsn) ->
 	    {atom_to_list(?MODULE), AppVsn},
 	    	log_roller_utils:get_app_version(erts),
             [log_roller_utils:get_app_version(AppName) || AppName <- Apps] ++ [
-			{mochiweb, "0.2"},
+			{mochiweb, "0.01"},
 			{log_roller_server, AppVsn},
 	        {?MODULE, AppVsn}
 	    ]

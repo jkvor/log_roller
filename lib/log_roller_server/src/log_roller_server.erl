@@ -25,7 +25,8 @@
 -behaviour(application).
 
 -export([
-	start/0, start/2, stop/1, init/1, start_phase/3, build_rel/1
+	start/0, start/2, stop/1, init/1, 
+	start_phase/3, build_rel/1, compile_templates/0
 ]).
 
 -include("log_roller.hrl").
@@ -52,7 +53,9 @@ init(_) ->
 	{ok, {{one_for_one, 10, 10}, [
 			{erlang:make_ref(), {lr_write_to_disk, start_link, [LogConfig]}, permanent, 5000, worker, [lr_write_to_disk]}
 		 || LogConfig <- Logs] ++ [
-		    {lr_hooks, {lr_hooks, start_link, []}, permanent, 5000, worker, [lr_hooks]}
+		    {lr_hooks, {lr_hooks, start_link, []}, permanent, 5000, worker, [lr_hooks]},
+		    {lr_web_server, {lr_web_server, start_link, [[]]}, permanent, 5000, worker, [lr_web_server]},
+    		{lr_tail, {lr_tail, start_link, []}, permanent, 5000, worker, [lr_tail]}
 		 ]
 	}}.
 	
@@ -71,6 +74,7 @@ build_rel(AppVsn) ->
 	    {atom_to_list(?MODULE), AppVsn},
 	    	log_roller_utils:get_app_version(erts),
             [log_roller_utils:get_app_version(AppName) || AppName <- Apps] ++ [
+            {mochiweb, "0.01"},
 	        {?MODULE, AppVsn}
 	    ]
 	},
@@ -78,3 +82,9 @@ build_rel(AppVsn) ->
 	file:close(FD),
 	systools:make_script("bin/" ++ atom_to_list(?MODULE), [local]),
 	ok.
+
+compile_templates() ->
+  {ok, Filenames} = file:list_dir("templates"),
+  [erltl:compile("templates/" ++ Filename, [{outdir, "ebin"}, report_errors, report_warnings, nowarn_unused_vars]) 
+    || Filename <- Filenames],
+  ok.

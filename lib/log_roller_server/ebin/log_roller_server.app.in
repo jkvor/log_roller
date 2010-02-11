@@ -12,7 +12,7 @@ ${MODULES}
     ]},
     {registered, []},
     {mod, {log_roller_server, []}},
-    {applications, [kernel, stdlib]},
+    {applications, [kernel, stdlib, mochiweb]},
 	{start_phases, [{world, []}, {pg2, []}]}
 ]}.
 EOF

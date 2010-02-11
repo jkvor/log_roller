@@ -117,10 +117,16 @@ handle_cast(_Message, State) -> {noreply, State}.
 handle_info({timeout,_,flush}, State) ->
     [begin
         [begin
-            Terms = lists:foldl(fun(Log, Acc) -> [log_roller_utils:format_log_entry(Log)|Acc] end, [], Buffer#buffer.logs),
+            Terms = lists:foldl(
+                fun(Log, Acc) -> 
+                    case lr_filter:filter(Log, Opts) of
+                        [_] -> [log_roller_utils:format_log_entry(Log)|Acc];
+                        [] -> Acc
+                    end
+                end, [], Buffer#buffer.logs),
             Content = lr_logs:render({data, Terms}),
             (catch Response:write_chunk(Content))
-         end || {LogName, {_Opts, Response}} <- State#state.responses, LogName == Buffer#buffer.log_name]
+         end || {LogName, {Opts, Response}} <- State#state.responses, LogName == Buffer#buffer.log_name]
      end || Buffer <- State#state.buffers],
     erlang:start_timer(?TIMER_VALUE, ?MODULE, flush),
     {noreply, State#state{buffers=[]}};
@@ -143,3 +149,4 @@ terminate(_Reason, _State) -> ok.
 %% @hidden
 %%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
+

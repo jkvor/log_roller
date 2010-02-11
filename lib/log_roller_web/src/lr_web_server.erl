@@ -96,7 +96,7 @@ serve_logs(Params, Req) ->
 	Response:write_chunk("").
 		
 fetch_logs(Resp, Cont, Opts, Max) ->
-	case (catch lrb:fetch(Cont, Opts)) of
+	case (catch lrb:fetch(Cont, [{use_cache, false}|Opts])) of
 		{'EXIT', Error} ->
 			Resp:write_chunk(io_lib:format("cont: ~p, error: ~p~n", [Cont, Error]));
 		{Cont1, Logs} when is_record(Cont1, continuation) ->

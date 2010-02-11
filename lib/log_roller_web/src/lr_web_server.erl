@@ -34,9 +34,7 @@ start_link(Args) when is_list(Args) ->
 	Port = get_arg_value(port, Args, ?DEFAULT_PORT),
 	DocRoot = get_arg_value(doc_root, Args),
 	Loop = fun (Req) -> ?MODULE:loop(Req, DocRoot) end,
-	Res = mochiweb_http:start([{loop, Loop}, {ip, Address}, {port, Port}]),
-	io:format("mochiweb_http:start ~p, ~p, ~p: ~p~n", [Address, Port, DocRoot, Res]),
-	Res.
+    mochiweb_http:start([{loop, Loop}, {ip, Address}, {port, Port}]).
 
 loop(Req, DocRoot) ->
 	PathTokens = [Req:get(method)|string:tokens(Req:get(path), "/")],
@@ -82,7 +80,6 @@ handle(['POST', "tail"], Req, _DocRoot) ->
 handle(_, _, _) -> no_match.
 		
 serve_logs(Params, Req) ->
-	io:format("params: ~p~n", [Params]),
 	Dict = opts(Params, dict:new()),
 	Max = 
 	    case dict:find(max, Dict) of

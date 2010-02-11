@@ -20,6 +20,10 @@ will attempt to connect. Make sure to have matching ~/.erlang.cookie
 files hosted on the servers running log_roller and log_roller_server. 
 The nodes will not be able to see each other otherwise.
 
+## Dependencies
+
+mochiweb <http://github.com/clones/mochiweb>
+
 ## Installation
 Either clone the repository github.com/JacobVorreuter/log_roller
 or download the tarball from jacobvorreuter.github.com/log_roller

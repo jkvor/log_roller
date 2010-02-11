@@ -169,7 +169,7 @@ opts([{Key,Val}|Tail], Dict) ->
 get_arg_value(Key, Args, Default) ->
 	case proplists:get_value(Key, Args) of
 		undefined -> 
-			case application:get_env(log_roller_web, Key) of
+			case application:get_env(log_roller_server, Key) of
 				{ok, Val} -> Val;
 				undefined -> Default
 			end;
@@ -179,10 +179,10 @@ get_arg_value(Key, Args, Default) ->
 get_arg_value(doc_root, Args) ->
     case proplists:get_value(doc_root, Args) of
 		undefined -> 
-			case application:get_env(log_roller_web, doc_root) of
+			case application:get_env(log_roller_server, doc_root) of
 				{ok, Val} -> Val;
 				undefined ->
-				    case code:lib_dir(log_roller_web) of
+				    case code:lib_dir(log_roller_server) of
                         {error, bad_name} -> 
                             {ok, Dir} = file:get_cwd(), 
                             Dir ++ "/public";

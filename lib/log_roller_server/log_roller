@@ -17,15 +17,15 @@ get_sasl() {
 }
 
 dev_server() {
-	erl -pa ebin -name log_roller@`hostname` +W w +A 1 -config priv/dev -boot log_roller_web
+	erl -pa ebin -name log_roller@`hostname` +W w +A 1 -config priv/dev -boot log_roller_server
 }
 
 console_server() {
-	erl -name log_roller@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_web $(get_sasl)
+	erl -name log_roller@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_server $(get_sasl)
 }
 
 start_server() {
-	erl -detached -name log_roller@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_web -noshell $(get_sasl)
+	erl -detached -name log_roller@$HOSTNAME +W w +A 1 -config $(get_root)/priv/log_roller -boot log_roller_server -noshell $(get_sasl)
 }
 
 dev(){

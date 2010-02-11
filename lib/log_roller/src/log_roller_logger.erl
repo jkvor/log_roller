@@ -22,7 +22,7 @@
 %% OTHER DEALINGS IN THE SOFTWARE.
 -module(log_roller_logger).
 
--export([do_log/4, do_log/5, set/2]).
+-export([do_log/5, do_log/6, set/2]).
 
 %% Error levels:
 -define(LOG_LEVELS, [{no_log, 0},
@@ -32,27 +32,22 @@
                      {info, 4},
                      {debug, 5}]).
                      
-do_log(ReportType, Module, Line, Args) when is_atom(ReportType), is_atom(Module), is_integer(Line) ->
-    LogMod = ensure_loaded(Module),
-    erlang:apply(LogMod, ReportType, [Module, Line, Args]).
+do_log(ReportType, Module, LoggerModule, Line, Args) when is_atom(ReportType), is_atom(Module), is_atom(LoggerModule), is_integer(Line) ->
+    ensure_loaded(LoggerModule),
+    erlang:apply(LoggerModule, ReportType, [Module, Line, Args]).
     
-do_log(ReportType, Module, Line, Format, Args) when is_atom(ReportType), is_atom(Module), is_integer(Line) ->
-    LogMod = ensure_loaded(Module),
-    erlang:apply(LogMod, ReportType, [Module, Line, Format, Args]).
+do_log(ReportType, Module, LoggerModule, Line, Format, Args) when is_atom(ReportType), is_atom(Module), is_atom(LoggerModule), is_integer(Line) ->
+    ensure_loaded(LoggerModule),
+    erlang:apply(LoggerModule, ReportType, [Module, Line, Format, Args]).
     
-ensure_loaded(Module) ->
-    LogModStr = module_str(Module),
-    LogMod = list_to_atom(LogModStr),
-    case erlang:module_loaded(LogMod) of
+ensure_loaded(LoggerModule) ->
+    case erlang:module_loaded(LoggerModule) of
         true -> ok;
-        false -> set_internal(LogModStr, info)
-    end,
-    LogMod.
-    
-module_str(Module) -> lists:concat([Module, '_logger']).
+        false -> set_internal(LoggerModule, info)
+    end.
 
 set(Module, LogLevel) when is_atom(Module), is_atom(LogLevel) ->
-    set_internal(module_str(Module), LogLevel);
+    set_internal(atom_to_list(Module) ++ "_logger", LogLevel);
     
 set(Regexp, LogLevel) when is_list(Regexp), is_atom(LogLevel) ->
     {ok, MP} = re:compile(Regexp),
@@ -60,7 +55,7 @@ set(Regexp, LogLevel) when is_list(Regexp), is_atom(LogLevel) ->
         {match,_} ->
             case re:run(atom_to_list(Module), ".*_logger$") of
                 {match,_} -> ok;
-                _ -> set_internal(module_str(Module), LogLevel)
+                _ -> set_internal(atom_to_list(Module) ++ "_logger", LogLevel)
             end;
         _ ->
             ok

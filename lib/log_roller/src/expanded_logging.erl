@@ -40,11 +40,11 @@ expand_forms({call,L,{remote,_,{atom,_,error_logger},{atom,_,MSG}},Args}=Form) w
 	case Args of
 		[{string,_,_}=FormatStr] ->
 			{call,L,{remote,L,{atom,L,log_roller_logger},{atom,L,do_log}},[
-				{atom,L,MSG},{atom,L,get(module)},{integer,L,L},FormatStr,{nil,L}
+				{atom,L,MSG},{atom,L,get(module)},{atom,L,list_to_atom(lists:concat([get(module), '_logger']))},{integer,L,L},FormatStr,{nil,L}
 			]};
 		[{string,_,_}=FormatStr, Cons] ->
 			{call,L,{remote,L,{atom,L,log_roller_logger},{atom,L,do_log}},[
-				{atom,L,MSG},{atom,L,get(module)},{integer,L,L},FormatStr,Cons
+				{atom,L,MSG},{atom,L,get(module)},{atom,L,list_to_atom(lists:concat([get(module), '_logger']))},{integer,L,L},FormatStr,Cons
 			]};
 		_ ->
 			Form
@@ -58,7 +58,7 @@ expand_forms({call,L,{remote,_,{atom,_,error_logger},{atom,_,REPORT}},Args}=Form
 	case Args of
 		[A] ->
 			{call,L,{remote,L,{atom,L,log_roller_logger},{atom,L,do_log}},[
-				{atom,L,REPORT},{atom,L,get(module)},{integer,L,L},A
+				{atom,L,REPORT},{atom,L,get(module)},{atom,L,list_to_atom(lists:concat([get(module), '_logger']))},{integer,L,L},A
 			]};
 		_ ->
 			Form

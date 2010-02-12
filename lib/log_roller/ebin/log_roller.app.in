@@ -12,7 +12,7 @@ ${MODULES}
     ]},
     {registered, []},
     {mod, {log_roller, []}},
-    {applications, [kernel, stdlib]},
+    {applications, [kernel, stdlib, dynamic_compile]},
 	{start_phases, [{world, []}]}
 ]}.
 EOF

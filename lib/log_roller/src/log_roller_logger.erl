@@ -43,7 +43,7 @@ do_log(ReportType, Module, LoggerModule, Line, Format, Args) when is_atom(Report
 ensure_loaded(LoggerModule) ->
     case erlang:module_loaded(LoggerModule) of
         true -> ok;
-        false -> set_internal(LoggerModule, info)
+        false -> set_internal(atom_to_list(LoggerModule), info)
     end.
 
 set(Module, LogLevel) when is_atom(Module), is_atom(LogLevel) ->

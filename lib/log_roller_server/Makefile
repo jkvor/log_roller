@@ -8,13 +8,16 @@ all: rel
 compile: app
 	(cd src;$(MAKE))
 
-app:
+app: 
 	sh ebin/$(PKG_NAME).app.in $(VERSION)
 
-rel: compile
+rel: templates
 	mkdir -p bin
 	erl -pa ebin ../log_roller/ebin -eval '$(PKG_NAME):build_rel("$(VERSION)")' -s init stop -noshell
 
+templates: compile
+	erl -pa ebin -eval '$(PKG_NAME):compile_templates()' -s init stop -noshell	
+	
 clean:
 	rm -rf ebin/*.beam ebin/*.app doc/*.html doc/*.png doc/*-info doc/*.css bin/*.boot bin/*.rel bin/*.script Mnesia* erl_crash.dump *.tgz *.1 *.idx *.siz tmp
 

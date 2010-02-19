@@ -34,7 +34,9 @@ start_link(Args) when is_list(Args) ->
 	Port = get_arg_value(port, Args, ?DEFAULT_PORT),
 	DocRoot = get_arg_value(doc_root, Args),
 	Loop = fun (Req) -> ?MODULE:loop(Req, DocRoot) end,
-    mochiweb_http:start([{loop, Loop}, {ip, Address}, {port, Port}]).
+    Result = mochiweb_http:start([{loop, Loop}, {ip, Address}, {port, Port}]),
+    io:format("mochiweb_http:start/1 (~p, ~p, ~p): ~p~n", [Address, Port, DocRoot, Result]),
+    Result.
 
 loop(Req, DocRoot) ->
 	PathTokens = [Req:get(method)|string:tokens(Req:get(path), "/")],

@@ -2,5 +2,6 @@
 	{deps, [
 		{"clones/mochiweb", []},
 		{"JacobVorreuter/dynamic_compile", []}
-	]}
+	]},
+	{install_command, "make install"}
 ].

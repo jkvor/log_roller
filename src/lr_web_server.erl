@@ -50,7 +50,7 @@ loop(Req, DocRoot) ->
 		        
 handle(['GET'], Req, DocRoot) ->
 	Req:serve_file("logs.html", DocRoot);
-	
+	    
 handle(['GET', "logs"], Req, _DocRoot) ->
 	serve_logs(Req:parse_qs(), Req);
 	

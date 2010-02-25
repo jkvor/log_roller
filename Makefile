@@ -1,20 +1,26 @@
 VERSION=0.4
+PKGNAME=log_roller
 
-all: compile
+all: rel
 
-compile:
-	(cd lib/log_roller;$(MAKE))
-	(cd lib/log_roller_server;$(MAKE))
+emake: app
+	erl -make
+	
+rel: templates release/$(PKGNAME).tar.gz
+	
+app:
+	sh ebin/log_roller.app.in $(VERSION)
+	sh ebin/log_roller_server.app.in $(VERSION)
+	
+templates: emake
+	erl -pa ebin -eval 'log_roller_server:compile_templates()' -s init stop -noshell
+	
+release/$(PKGNAME).rel release/$(PKGNAME).script release/$(PKGNAME).tar.gz:
+	mkdir -p release
+	escript build_rel.escript $(PKGNAME)
+
+test: compile
+	prove t/*.t
 
 clean:
-	(cd lib/log_roller;$(MAKE) clean)
-	(cd lib/log_roller_server;$(MAKE) clean)
-	
-install:
-	(cd lib/log_roller;$(MAKE) install $(prefix))
-	(cd lib/log_roller_server;$(MAKE) install $(prefix))
-
-package: clean
-	@mkdir log_roller-$(VERSION)/ && cp -rf lib Makefile README.markdown log_roller-$(VERSION)
-	@COPYFILE_DISABLE=true tar zcf log_roller-$(VERSION).tgz log_roller-$(VERSION)
-	@rm -rf log_roller-$(VERSION)/
+	rm -rf $(wildcard ebin/*.beam) erl_crash.dump *.boot *.rel *.script ebin/*.app release

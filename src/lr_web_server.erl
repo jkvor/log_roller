@@ -184,7 +184,7 @@ get_arg_value(doc_root, Args) ->
 			case application:get_env(log_roller_server, doc_root) of
 				{ok, Val} -> Val;
 				undefined ->
-				    case code:lib_dir(log_roller_server) of
+				    case code:lib_dir(log_roller) of
                         {error, bad_name} -> 
                             {ok, Dir} = file:get_cwd(), 
                             Dir ++ "/public";
